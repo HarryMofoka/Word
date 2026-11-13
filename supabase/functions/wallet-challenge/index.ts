@@ -3,6 +3,7 @@ import { handleCors } from '../_shared/cors.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { AppError, errorResponse, jsonResponse } from '../_shared/errors.ts';
 import {
+  assertNoSecretMaterial,
   optionalString,
   parseJsonBody,
   requireAddress,
@@ -26,6 +27,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await parseJsonBody<Record<string, unknown>>(req);
+    assertNoSecretMaterial(body);
     const action = requireString(body.action, 'action', 3, 30);
 
     if (action === 'register_and_challenge') {
@@ -114,27 +116,39 @@ Deno.serve(async (req: Request) => {
         throw new AppError(404, 'CHALLENGE_NOT_FOUND', 'Wallet challenge not found.');
       }
 
-      if (challenge.status === 'verified') {
-        throw new AppError(409, 'ALREADY_VERIFIED', 'Challenge already verified.');
+      if (challenge.status !== 'pending') {
+        throw new AppError(409, 'CHALLENGE_ALREADY_USED', `Challenge cannot be reused (status: ${challenge.status}).`);
+      }
+
+      if (!/^0x[a-fA-F0-9]{130}$/.test(signature)) {
+        throw new AppError(400, 'INVALID_SIGNATURE', 'Signature must be a valid 65-byte hex ECDSA signature.');
       }
 
       if (new Date(challenge.expires_at).getTime() < Date.now()) {
         await adminClient
           .from('wallet_challenges')
           .update({ status: 'expired' })
-          .eq('id', challenge.id);
+          .eq('id', challenge.id)
+          .eq('status', 'pending');
         throw new AppError(400, 'CHALLENGE_EXPIRED', 'Wallet challenge has expired.');
       }
 
       const nowIso = new Date().toISOString();
-      await adminClient
+      const { data: consumedChallenge, error: consumeErr } = await adminClient
         .from('wallet_challenges')
         .update({
           status: 'verified',
           signature,
           verified_at: nowIso,
         })
-        .eq('id', challenge.id);
+        .eq('id', challenge.id)
+        .eq('status', 'pending')
+        .select('id')
+        .maybeSingle();
+
+      if (consumeErr || !consumedChallenge) {
+        throw new AppError(409, 'CHALLENGE_REPLAY_BLOCKED', 'Challenge was already verified or expired.');
+      }
 
       let updatedWallet = null;
       if (challenge.wallet_id) {

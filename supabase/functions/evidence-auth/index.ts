@@ -2,7 +2,14 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { AppError, errorResponse, jsonResponse } from '../_shared/errors.ts';
-import { optionalString, parseJsonBody, requireString, requireUuid } from '../_shared/validation.ts';
+import {
+  assertNoDangerousHtml,
+  assertSafeStoragePath,
+  optionalString,
+  parseJsonBody,
+  requireString,
+  requireUuid,
+} from '../_shared/validation.ts';
 import { recordAuditLog } from '../_shared/logger.ts';
 import { enforceRateLimit } from '../_shared/rateLimit.ts';
 
@@ -53,10 +60,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'create_download_url') {
-      const storagePath = requireString(body.storagePath, 'storagePath', 5, 300);
-      if (!storagePath.startsWith(`${disputeId}/`)) {
-        throw new AppError(403, 'FORBIDDEN', 'Evidence path does not belong to this dispute.');
-      }
+      const storagePath = assertSafeStoragePath(
+        requireString(body.storagePath, 'storagePath', 5, 300),
+        `${disputeId}/`
+      );
 
       const { data: signed, error: signErr } = await adminClient.storage
         .from('dispute-evidence')
@@ -70,9 +77,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'add_note' || action === 'commit_evidence') {
-      const label = requireString(body.label, 'label', 2, 160);
-      const note = requireString(body.note, 'note', 2, 2000);
-      const storagePath = optionalString(body.storagePath, 'storagePath', 300);
+      const label = assertNoDangerousHtml(requireString(body.label, 'label', 2, 160), 'label');
+      const note = assertNoDangerousHtml(requireString(body.note, 'note', 2, 2000), 'note');
+      const rawStoragePath = optionalString(body.storagePath, 'storagePath', 300);
+      const storagePath = rawStoragePath
+        ? assertSafeStoragePath(rawStoragePath, `${disputeId}/`)
+        : null;
       const mimeType = optionalString(body.mimeType, 'mimeType', 100);
       const byteSize = typeof body.byteSize === 'number' && body.byteSize >= 0 ? Math.floor(body.byteSize) : null;
 

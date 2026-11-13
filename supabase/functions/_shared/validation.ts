@@ -32,6 +32,9 @@ export function requireString(
   if (typeof val !== 'string') {
     throw new AppError(400, 'VALIDATION_ERROR', `${field} must be a string.`);
   }
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(val)) {
+    throw new AppError(400, 'VALIDATION_ERROR', `${field} contains invalid control characters.`);
+  }
   const trimmed = val.trim();
   if (trimmed.length < minLen || trimmed.length > maxLen) {
     throw new AppError(
@@ -41,6 +44,73 @@ export function requireString(
     );
   }
   return trimmed;
+}
+
+const DANGEROUS_HTML_PATTERN =
+  /<\s*\/?\s*script\b|javascript\s*:|vbscript\s*:|data\s*:\s*text\/html|\bon[a-z]+\s*=/i;
+
+export function assertNoDangerousHtml(val: string, field = 'input'): string {
+  if (DANGEROUS_HTML_PATTERN.test(val)) {
+    throw new AppError(400, 'UNSAFE_INPUT', `${field} contains disallowed script or markup content.`);
+  }
+  return val;
+}
+
+export function requireSafeUrl(val: unknown, field = 'url'): string {
+  const raw = requireString(val, field, 8, 2048);
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new AppError(400, 'INVALID_URL', `${field} must be a valid URL.`);
+  }
+  const isLocalHttp =
+    parsed.protocol === 'http:' &&
+    (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+  if (parsed.protocol !== 'https:' && !isLocalHttp) {
+    throw new AppError(400, 'UNSAFE_URL', `${field} must use https (or localhost http).`);
+  }
+  return parsed.toString();
+}
+
+export function assertSafeStoragePath(storagePath: string, expectedPrefix: string): string {
+  if (
+    !storagePath ||
+    storagePath.includes('..') ||
+    storagePath.includes('\\') ||
+    storagePath.startsWith('/') ||
+    !storagePath.startsWith(expectedPrefix)
+  ) {
+    throw new AppError(403, 'FORBIDDEN', 'Evidence path does not belong to this resource.');
+  }
+  return storagePath;
+}
+
+const FORBIDDEN_SECRET_KEYS = new Set([
+  'privatekey',
+  'private_key',
+  'seedphrase',
+  'seed_phrase',
+  'mnemonic',
+  'recoveryphrase',
+  'recovery_phrase',
+  'secretkey',
+  'secret_key',
+]);
+
+export function assertNoSecretMaterial(payload: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(payload)) {
+    if (FORBIDDEN_SECRET_KEYS.has(key.toLowerCase())) {
+      throw new AppError(
+        400,
+        'SECRET_MATERIAL_FORBIDDEN',
+        `Private keys and recovery phrases must never be sent to or stored by the server (${key}).`
+      );
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      assertNoSecretMaterial(value as Record<string, unknown>);
+    }
+  }
 }
 
 export function optionalString(val: unknown, field: string, maxLen = 2000): string | null {

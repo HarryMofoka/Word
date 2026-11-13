@@ -38,6 +38,7 @@ import {
   type TransferQuote,
 } from '../../../services/wdkWalletService';
 import { getNetworkConfig } from '../../../config/blockchain';
+import { validateTransactionForSigning } from '../../../services/walletSecurityService';
 
 type PayStep =
   | 'scan'
@@ -281,17 +282,26 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
       setTxHash(null);
 
       try {
+        const signingPreview = validateTransactionForSigning({
+          fromAddress: wallet.address,
+          toAddress: request.recipientAddress,
+          amount: request.amount,
+          token: request.token,
+          network: normalizedNetwork,
+          approvalAcknowledged: approvedChecked,
+        });
+
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           request.id
         );
         const prepared = await preparePayment({
-          amount: request.amount,
-          tokenSymbol: request.token,
-          network: normalizedNetwork,
+          amount: signingPreview.amount,
+          tokenSymbol: signingPreview.token,
+          network: signingPreview.network,
           recipientName: request.recipientName,
-          recipientAddress: request.recipientAddress,
+          recipientAddress: signingPreview.destinationAddress,
           purpose: request.description,
-          senderAddress: wallet.address,
+          senderAddress: signingPreview.fromAddress,
           paymentRequestId: isUuid ? request.id : undefined,
         });
         if (!active) return;

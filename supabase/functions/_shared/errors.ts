@@ -1,4 +1,4 @@
-import { corsHeaders } from './cors.ts';
+import { buildCorsHeaders, securityHeaders } from './cors.ts';
 
 export class AppError extends Error {
   readonly status: number;
@@ -11,21 +11,23 @@ export class AppError extends Error {
   }
 }
 
-export function jsonResponse(data: unknown, status = 200): Response {
+export function jsonResponse(data: unknown, status = 200, req?: Request): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
+      ...buildCorsHeaders(req),
+      ...securityHeaders,
+      'Content-Type': 'application/json; charset=utf-8',
     },
   });
 }
 
-export function errorResponse(err: unknown): Response {
+export function errorResponse(err: unknown, req?: Request): Response {
   if (err instanceof AppError) {
     return jsonResponse(
       { error: { code: err.code, message: err.message } },
-      err.status
+      err.status,
+      req
     );
   }
   console.error('Unhandled Edge Function error:', err);
@@ -36,7 +38,7 @@ export function errorResponse(err: unknown): Response {
         message: 'An unexpected server error occurred.',
       },
     },
-    500
+    500,
+    req
   );
 }
-

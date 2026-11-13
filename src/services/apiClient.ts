@@ -19,6 +19,10 @@ export async function callEdgeFunction<T>(
     query?: Record<string, string>;
   } = {}
 ): Promise<T> {
+  if (!/^[a-z0-9-]+$/.test(fnName)) {
+    throw new ApiError('INVALID_ENDPOINT', 'Invalid API endpoint name.', 400);
+  }
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -36,6 +40,7 @@ export async function callEdgeFunction<T>(
 
   const res = await fetch(url.toString(), {
     method: options.method ?? 'GET',
+    credentials: 'omit',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
