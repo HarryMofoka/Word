@@ -584,3 +584,62 @@ export async function pollTransactionReceipt(
 
   return 'pending';
 }
+
+export async function signChallengeMessage(params: {
+  message: string;
+  expectedAddress: string;
+  network: string;
+  walletMethod: 'created' | 'connected' | 'imported';
+  signingPhrase?: string;
+}): Promise<string> {
+  const cfg = getNetworkConfig(params.network);
+
+  if (params.walletMethod === 'connected') {
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      throw new WalletIntegrationError(
+        'UNSUPPORTED_WALLET',
+        'Browser wallet provider not found.'
+      );
+    }
+    const provider = new BrowserProvider(eth);
+    const signer = await provider.getSigner();
+    const signerAddr = await signer.getAddress();
+    if (signerAddr.toLowerCase() !== params.expectedAddress.toLowerCase()) {
+      throw new WalletIntegrationError(
+        'UNSUPPORTED_WALLET',
+        `Connected wallet (${signerAddr}) does not match expected address (${params.expectedAddress}).`
+      );
+    }
+    return signer.signMessage(params.message);
+  }
+
+  const phrase = (params.signingPhrase ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!phrase || !WDK.isValidSeed(phrase)) {
+    throw new WalletIntegrationError(
+      'INVALID_SEED',
+      'Enter your valid 12 or 24-word recovery phrase to sign the verification challenge.'
+    );
+  }
+
+  const wdk = new WDK(phrase).registerWallet('ethereum', EvmManager, {
+    provider: cfg.rpcUrl,
+  } as never);
+
+  try {
+    const account = (await wdk.getAccount('ethereum', 0)) as unknown as {
+      getAddress: () => Promise<string>;
+      sign: (msg: string) => Promise<string>;
+    };
+    const derived = await account.getAddress();
+    if (derived.toLowerCase() !== params.expectedAddress.toLowerCase()) {
+      throw new WalletIntegrationError(
+        'INVALID_SEED',
+        'The entered recovery phrase does not match the recipient wallet address.'
+      );
+    }
+    return account.sign(params.message);
+  } finally {
+    wdk.dispose();
+  }
+}

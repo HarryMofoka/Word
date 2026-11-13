@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Ban, Check, Copy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Ban, Check, Copy, ShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 import { Button } from '../../../components/ui/Button';
 import type { PaymentRequestData, WalletState } from '../../types';
 import { cancelPayment, createPaymentRequest } from '../../../services/paymentsService';
+import {
+  WALLET_CONTROL_IDENTITY_DISCLAIMER,
+  issueRecipientChallenge,
+  verifyRecipientChallenge,
+} from '../../../services/recipientVerificationService';
+import { signChallengeMessage } from '../../../services/wdkWalletService';
 import {
   NETWORK_CONFIGS,
   validateTokenCompatibility,
@@ -104,6 +110,10 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
   const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [verifyingControl, setVerifyingControl] = useState(false);
+  const [controlVerifiedAt, setControlVerifiedAt] = useState<string | null>(null);
+  const [controlPhrase, setControlPhrase] = useState('');
+  const [controlError, setControlError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -289,6 +299,89 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
                 : 'No expiry'}
             </span>
           </div>
+        </div>
+
+        <div
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: '14px',
+            padding: '16px 18px',
+            backgroundColor: 'var(--bg)',
+            marginBottom: '20px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <ShieldCheck size={17} style={{ color: controlVerifiedAt ? '#1a8f4d' : 'var(--sub)' }} />
+            <strong style={{ fontSize: '14px' }}>
+              {controlVerifiedAt
+                ? `Recipient wallet control verified (${new Date(controlVerifiedAt).toLocaleString()})`
+                : 'Sign wallet-control proof for payer'}
+            </strong>
+          </div>
+          <p className="body-sm" style={{ marginBottom: '12px', color: 'var(--sub)' }}>
+            {WALLET_CONTROL_IDENTITY_DISCLAIMER}
+          </p>
+
+          {!controlVerifiedAt && generated.status === 'open' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {wallet.method !== 'connected' && (
+                <input
+                  type="password"
+                  className="field-input"
+                  placeholder="Enter your 12 or 24-word recovery phrase to sign locally (never sent)"
+                  value={controlPhrase}
+                  onChange={(e) => setControlPhrase(e.target.value)}
+                  autoComplete="off"
+                />
+              )}
+              {controlError && (
+                <p role="alert" className="body-sm" style={{ color: '#b42318' }}>
+                  {controlError}
+                </p>
+              )}
+              <div>
+                <Button
+                  compact
+                  disabled={verifyingControl}
+                  onClick={async () => {
+                    setControlError(null);
+                    setVerifyingControl(true);
+                    try {
+                      const { challenge } = await issueRecipientChallenge({
+                        paymentRequestId: generated.id,
+                        recipientAddress: generated.recipientAddress,
+                        network: generated.network,
+                      });
+                      const phraseToUse = controlPhrase;
+                      setControlPhrase('');
+                      const signature = await signChallengeMessage({
+                        message: challenge.message,
+                        expectedAddress: generated.recipientAddress,
+                        network: generated.network,
+                        walletMethod: wallet.method,
+                        signingPhrase: phraseToUse,
+                      });
+                      const res = await verifyRecipientChallenge({
+                        challengeId: challenge.id,
+                        paymentRequestId: generated.id,
+                        signature,
+                      });
+                      setControlVerifiedAt(res.verifiedAt);
+                    } catch (err) {
+                      setControlPhrase('');
+                      setControlError(
+                        err instanceof Error ? err.message : 'Wallet-control verification failed.'
+                      );
+                    } finally {
+                      setVerifyingControl(false);
+                    }
+                  }}
+                >
+                  {verifyingControl ? 'Signing & verifying...' : 'Sign & verify wallet control'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="ws-actions-row">

@@ -19,6 +19,11 @@ import {
   verifyBlockchainReceipt,
 } from '../../../services/paymentsService';
 import {
+  WALLET_CONTROL_IDENTITY_DISCLAIMER,
+  getRecipientVerificationStatus,
+  type RecipientVerificationResult,
+} from '../../../services/recipientVerificationService';
+import {
   executeOnChainPayment,
   pollTransactionReceipt,
   quoteTransferCost,
@@ -73,7 +78,10 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
   const [tamperError, setTamperError] = useState<string | null>(null);
   const [verificationState, setVerificationState] = useState<
     'verified' | 'mismatch' | 'unverified'
-  >('verified');
+  >('unverified');
+  const [verificationResult, setVerificationResult] =
+    useState<RecipientVerificationResult | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
   const [approvedChecked, setApprovedChecked] = useState(false);
   const [quote, setQuote] = useState<TransferQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -115,6 +123,37 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     timestamp: new Date(tx.created_at).toLocaleString(),
     txHash: tx.tx_hash ?? undefined,
   });
+
+  const fetchRecipientProof = async (reqId: string) => {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reqId);
+    if (!isUuid) {
+      setVerificationState('unverified');
+      setVerificationResult({
+        status: 'unverified',
+        intendedAddress: request.recipientAddress,
+        recoveredAddress: null,
+        verifiedAt: null,
+        disclaimer: WALLET_CONTROL_IDENTITY_DISCLAIMER,
+      });
+      return;
+    }
+    setVerificationLoading(true);
+    try {
+      const res = await getRecipientVerificationStatus(reqId);
+      setVerificationResult(res);
+      setVerificationState(res.status);
+    } catch {
+      setVerificationState('unverified');
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 'verify') {
+      fetchRecipientProof(request.id);
+    }
+  }, [step, request.id]);
 
   // Fetch live sender balance and gas fee estimate when entering review step
   useEffect(() => {
@@ -532,23 +571,9 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           Check wallet control.
         </h1>
         <p className="body-md" style={{ marginBottom: '18px' }}>
-          Word checks whether the recipient has cryptographically signed control of the destination
-          address.
+          Word checks whether the recipient has cryptographically signed a challenge proving control
+          of the destination address for this payment request.
         </p>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
-          {(['verified', 'mismatch', 'unverified'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={`ws-nav-tab ${verificationState === mode ? 'is-active' : ''}`}
-              style={{ border: '1px solid var(--line)', textTransform: 'capitalize' }}
-              onClick={() => setVerificationState(mode)}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
 
         <div
           style={{
@@ -559,38 +584,63 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
             marginBottom: '18px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <ShieldCheck
-              size={18}
-              style={{
-                color:
-                  verificationState === 'verified'
-                    ? '#1a8f4d'
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              marginBottom: '10px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldCheck
+                size={18}
+                style={{
+                  color:
+                    verificationState === 'verified'
+                      ? '#1a8f4d'
+                      : verificationState === 'mismatch'
+                        ? '#b42318'
+                        : '#b54708',
+                }}
+              />
+              <strong style={{ fontSize: '15px' }}>
+                {verificationLoading
+                  ? 'Checking cryptographic proof...'
+                  : verificationState === 'verified'
+                    ? 'Wallet control verified'
                     : verificationState === 'mismatch'
-                      ? '#b42318'
-                      : '#b54708',
-              }}
-            />
-            <strong style={{ fontSize: '15px' }}>
-              {verificationState === 'verified'
-                ? 'Wallet control verified'
-                : verificationState === 'mismatch'
-                  ? 'Destination address mismatch detected'
-                  : 'Wallet control unverified'}
-            </strong>
+                      ? 'Destination address mismatch detected'
+                      : 'Wallet control unverified'}
+              </strong>
+            </div>
+            <button
+              type="button"
+              className="ws-ghost-btn"
+              disabled={verificationLoading}
+              onClick={() => fetchRecipientProof(request.id)}
+            >
+              <RefreshCw size={13} /> {verificationLoading ? 'Checking...' : 'Recheck'}
+            </button>
           </div>
-          <p className="body-sm">
+          <p className="body-sm" style={{ marginBottom: '8px' }}>
             {verificationState === 'verified'
-              ? `Signature matches ${request.recipientAddress}.`
+              ? `Recovered signing address matches ${request.recipientAddress}.`
               : verificationState === 'mismatch'
-                ? 'The address in this request does not match the previously signed wallet.'
-                : 'No cryptographic signature was provided for this address.'}
+                ? `Recovered signer (${verificationResult?.recoveredAddress ?? 'unknown'}) does not match intended recipient (${request.recipientAddress}).`
+                : 'No cryptographic challenge signature has been recorded for this payment request yet.'}
           </p>
+          {verificationResult?.verifiedAt && (
+            <p className="body-sm" style={{ color: 'var(--sub)' }}>
+              Verified at: {new Date(verificationResult.verifiedAt).toLocaleString()}
+            </p>
+          )}
         </div>
 
         <div className="ws-notice">
-          <strong>Important:</strong> Wallet-control verification confirms control of a wallet
-          address—it is not proof of real-world identity.
+          <strong>Important:</strong> {WALLET_CONTROL_IDENTITY_DISCLAIMER}
         </div>
 
         <div className="ws-actions-row">
