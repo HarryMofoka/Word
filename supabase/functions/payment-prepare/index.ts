@@ -49,15 +49,41 @@ Deno.serve(async (req: Request) => {
     if (paymentRequestId) {
       const { data: reqRow } = await adminClient
         .from('payment_requests')
-        .select('id, creator_id, status')
+        .select(
+          'id, creator_id, status, expires_at, amount_atomic, token_symbol, network, recipient_address'
+        )
         .eq('id', paymentRequestId)
         .maybeSingle();
 
       if (!reqRow) {
         throw new AppError(404, 'REQUEST_NOT_FOUND', 'Linked payment request not found.');
       }
+      if (
+        reqRow.status === 'open' &&
+        reqRow.expires_at &&
+        new Date(reqRow.expires_at).getTime() <= Date.now()
+      ) {
+        await adminClient
+          .from('payment_requests')
+          .update({ status: 'expired' })
+          .eq('id', paymentRequestId)
+          .eq('status', 'open');
+        throw new AppError(400, 'REQUEST_EXPIRED', 'This payment request has expired.');
+      }
       if (reqRow.status === 'cancelled' || reqRow.status === 'expired' || reqRow.status === 'completed') {
         throw new AppError(400, 'REQUEST_UNAVAILABLE', `Payment request is ${reqRow.status}.`);
+      }
+      if (
+        String(reqRow.amount_atomic) !== atomic ||
+        reqRow.token_symbol !== tokenSymbol ||
+        reqRow.network !== network ||
+        reqRow.recipient_address.toLowerCase() !== recipientAddress.toLowerCase()
+      ) {
+        throw new AppError(
+          400,
+          'REQUEST_TAMPERED',
+          'Payment details do not match the authoritative payment request.'
+        );
       }
       recipientId = reqRow.creator_id;
 

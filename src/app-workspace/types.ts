@@ -37,6 +37,7 @@ export type PaymentFlowMode = 'hub' | 'create-request' | 'scan-pay';
 
 export interface PaymentRequestData {
   id: string;
+  shareCode?: string;
   amount: string;
   token: string;
   network: string;
@@ -45,6 +46,8 @@ export interface PaymentRequestData {
   description: string;
   terms?: string;
   shareUrl: string;
+  expiresAt?: string | null;
+  status?: 'open' | 'completed' | 'cancelled' | 'expired';
 }
 
 export type QuickActionMode = 'send' | 'request' | 'verify' | null;

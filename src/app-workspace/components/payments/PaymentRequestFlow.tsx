@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, Ban, Check, Copy } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Button } from '../../../components/ui/Button';
 import type { PaymentRequestData, WalletState } from '../../types';
-import { createPaymentRequest } from '../../../services/paymentsService';
+import { cancelPayment, createPaymentRequest } from '../../../services/paymentsService';
 import {
   NETWORK_CONFIGS,
   validateTokenCompatibility,
@@ -17,66 +18,70 @@ interface PaymentRequestFlowProps {
 
 const TOKENS = ['USDT', 'USDC', 'ETH', 'WETH'];
 const NETWORKS = Object.keys(NETWORK_CONFIGS);
+const EXPIRY_OPTIONS = [
+  { label: '15 minutes', value: '15' },
+  { label: '1 hour', value: '60' },
+  { label: '24 hours', value: '1440' },
+  { label: '7 days', value: '10080' },
+  { label: 'No expiry', value: 'none' },
+];
 
-function DeterministicQR({ seed }: { seed: string }) {
-  const size = 21;
-  const cells: boolean[] = [];
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
+function RealPaymentQR({ value }: { value: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
 
-  const isFinder = (r: number, c: number) => {
-    const inTL = r < 7 && c < 7;
-    const inTR = r < 7 && c >= size - 7;
-    const inBL = r >= size - 7 && c < 7;
-    return inTL || inTR || inBL;
-  };
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(value, {
+      width: 180,
+      margin: 2,
+      color: { dark: '#111111', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    })
+      .then((url) => {
+        if (active) setDataUrl(url);
+      })
+      .catch(() => {
+        if (active) setDataUrl(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [value]);
 
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      if (isFinder(r, c)) {
-        const lr = r >= size - 7 ? r - (size - 7) : r;
-        const lc = c >= size - 7 ? c - (size - 7) : c;
-        const border = lr === 0 || lr === 6 || lc === 0 || lc === 6;
-        const inner = lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4;
-        cells.push(border || inner);
-      } else {
-        const bit = ((h ^ (r * 31 + c * 17)) >>> ((r + c) % 16)) & 1;
-        cells.push(bit === 1);
-      }
-    }
+  if (!dataUrl) {
+    return (
+      <div
+        style={{
+          width: 168,
+          height: 168,
+          borderRadius: '12px',
+          border: '1px solid var(--line)',
+          background: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '12px',
+          color: 'var(--sub)',
+        }}
+      >
+        Generating QR...
+      </div>
+    );
   }
 
   return (
-    <svg
-      width="168"
-      height="168"
-      viewBox={`0 0 ${size} ${size}`}
-      role="img"
-      aria-label="Generated payment request QR code"
+    <img
+      src={dataUrl}
+      width={168}
+      height={168}
+      alt="Scannable payment request QR code"
       style={{
         display: 'block',
         background: '#ffffff',
-        padding: '10px',
         borderRadius: '12px',
         border: '1px solid var(--line)',
       }}
-    >
-      {cells.map((on, idx) =>
-        on ? (
-          <rect
-            key={idx}
-            x={idx % size}
-            y={Math.floor(idx / size)}
-            width="1"
-            height="1"
-            fill="#111111"
-          />
-        ) : null
-      )}
-    </svg>
+    />
   );
 }
 
@@ -93,10 +98,12 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
   const [description, setDescription] = useState('Laptop purchase');
   const [terms, setTerms] = useState('In-person handover after confirmation on Testnet.');
   const [showTerms, setShowTerms] = useState(true);
+  const [expiryChoice, setExpiryChoice] = useState('1440');
 
   const [generated, setGenerated] = useState<PaymentRequestData | null>(null);
   const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -126,10 +133,12 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
         recipientAddress: recipientAddress.trim() || wallet.address,
         description: description.trim() || 'Peer-to-peer payment',
         terms: showTerms && terms.trim() ? terms.trim() : undefined,
+        expiresInMinutes: expiryChoice === 'none' ? null : Number(expiryChoice),
       });
 
       setGenerated({
         id: saved.id,
+        shareCode: saved.share_code,
         amount: String(saved.amount_numeric),
         token: saved.token_symbol,
         network: saved.network,
@@ -138,6 +147,13 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
         description: saved.description,
         terms: saved.terms ?? undefined,
         shareUrl: `${window.location.origin}/app?pay=${saved.share_code}`,
+        expiresAt: saved.expires_at,
+        status:
+          saved.status === 'completed' ||
+          saved.status === 'cancelled' ||
+          saved.status === 'expired'
+            ? saved.status
+            : 'open',
       });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to create payment request.');
@@ -194,7 +210,7 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
             marginBottom: '20px',
           }}
         >
-          <DeterministicQR seed={`${generated.id}:${generated.amount}:${generated.recipientAddress}`} />
+          <RealPaymentQR value={generated.shareUrl} />
 
           <div style={{ minWidth: 0 }}>
             <p className="eyebrow" style={{ marginBottom: '6px' }}>
@@ -258,13 +274,59 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
               </span>
             </div>
           )}
+          <div className="record-row">
+            <span className="record-key">Request ID / Status</span>
+            <span className="record-val">
+              {generated.shareCode ?? generated.id.slice(0, 8)} ·{' '}
+              <strong style={{ textTransform: 'capitalize' }}>{generated.status ?? 'open'}</strong>
+            </span>
+          </div>
+          <div className="record-row">
+            <span className="record-key">Expires</span>
+            <span className="record-val">
+              {generated.expiresAt
+                ? new Date(generated.expiresAt).toLocaleString()
+                : 'No expiry'}
+            </span>
+          </div>
         </div>
 
         <div className="ws-actions-row">
-          <button type="button" className="auth-back-link" onClick={onBack}>
-            Back to Payments
-          </button>
-          <Button onClick={() => onPreviewAsPayer(generated)}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" className="auth-back-link" onClick={onBack}>
+              Back to Payments
+            </button>
+            {generated.status === 'open' && (
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                disabled={cancelling}
+                style={{ color: '#b42318', borderColor: '#fecdca' }}
+                onClick={async () => {
+                  setCancelling(true);
+                  try {
+                    await cancelPayment({
+                      paymentRequestId: generated.id,
+                      reason: 'Cancelled by creator',
+                    });
+                    setGenerated((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+                  } catch (err) {
+                    setErrorMsg(
+                      err instanceof Error ? err.message : 'Failed to cancel request.'
+                    );
+                  } finally {
+                    setCancelling(false);
+                  }
+                }}
+              >
+                <Ban size={14} /> {cancelling ? 'Cancelling...' : 'Cancel request'}
+              </button>
+            )}
+          </div>
+          <Button
+            disabled={generated.status !== 'open'}
+            onClick={() => onPreviewAsPayer(generated)}
+          >
             Preview payer review flow <ArrowRight size={14} />
           </Button>
         </div>
@@ -336,22 +398,48 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
           </div>
         </div>
 
-        <div className="field-group">
-          <label className="field-label" htmlFor="req-network">
-            Select network
-          </label>
-          <select
-            id="req-network"
-            className="field-input"
-            value={network}
-            onChange={(e) => setNetwork(e.target.value)}
-          >
-            {NETWORKS.map((net) => (
-              <option key={net} value={net}>
-                {net}
-              </option>
-            ))}
-          </select>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '12px',
+          }}
+        >
+          <div className="field-group">
+            <label className="field-label" htmlFor="req-network">
+              Select network
+            </label>
+            <select
+              id="req-network"
+              className="field-input"
+              value={network}
+              onChange={(e) => setNetwork(e.target.value)}
+            >
+              {NETWORKS.map((net) => (
+                <option key={net} value={net}>
+                  {net}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field-group">
+            <label className="field-label" htmlFor="req-expiry">
+              Request expiry
+            </label>
+            <select
+              id="req-expiry"
+              className="field-input"
+              value={expiryChoice}
+              onChange={(e) => setExpiryChoice(e.target.value)}
+            >
+              {EXPIRY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div

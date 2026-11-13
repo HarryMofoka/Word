@@ -25,6 +25,7 @@ export async function createPaymentRequest(params: {
   recipientAddress: string;
   description: string;
   terms?: string;
+  expiresInMinutes?: number | null;
 }): Promise<PaymentRequestRow> {
   const res = await callEdgeFunction<{ request: PaymentRequestRow }>('payment-requests', {
     method: 'POST',

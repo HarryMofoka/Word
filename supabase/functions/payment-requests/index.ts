@@ -21,6 +21,27 @@ function generateShareCode(): string {
   return 'WRD-' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+async function expireIfPastDue<
+  T extends { id: string; status: string; expires_at: string | null }
+>(adminClient: Parameters<typeof recordAuditLog>[0], row: T): Promise<T> {
+  if (
+    row.status === 'open' &&
+    row.expires_at &&
+    new Date(row.expires_at).getTime() <= Date.now()
+  ) {
+    const { data: updated } = await adminClient
+      .from('payment_requests')
+      .update({ status: 'expired' })
+      .eq('id', row.id)
+      .eq('status', 'open')
+      .select('*')
+      .maybeSingle();
+    if (updated) return updated as T;
+    return { ...row, status: 'expired' };
+  }
+  return row;
+}
+
 Deno.serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -42,7 +63,8 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
         if (error) throw new AppError(500, 'FETCH_FAILED', error.message);
         if (!data) throw new AppError(404, 'NOT_FOUND', 'Payment request not found.');
-        return jsonResponse({ request: data });
+        const checked = await expireIfPastDue(adminClient, data);
+        return jsonResponse({ request: checked });
       }
 
       if (id) {
@@ -53,7 +75,8 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
         if (error) throw new AppError(500, 'FETCH_FAILED', error.message);
         if (!data) throw new AppError(404, 'NOT_FOUND', 'Payment request not found.');
-        return jsonResponse({ request: data });
+        const checked = await expireIfPastDue(adminClient, data);
+        return jsonResponse({ request: checked });
       }
 
       const { data, error } = await userClient
@@ -64,7 +87,10 @@ Deno.serve(async (req: Request) => {
         .limit(50);
 
       if (error) throw new AppError(500, 'LIST_FAILED', error.message);
-      return jsonResponse({ requests: data ?? [] });
+      const checkedList = await Promise.all(
+        (data ?? []).map((row) => expireIfPastDue(adminClient, row))
+      );
+      return jsonResponse({ requests: checkedList });
     }
 
     if (req.method === 'POST') {
@@ -78,6 +104,19 @@ Deno.serve(async (req: Request) => {
       const description = requireString(body.description, 'description', 1, 500);
       const terms = optionalString(body.terms, 'terms', 2000);
       const shareCode = generateShareCode();
+
+      let expiresAt: string | null = null;
+      if (body.expiresInMinutes !== undefined && body.expiresInMinutes !== null && body.expiresInMinutes !== '') {
+        const mins = Number(body.expiresInMinutes);
+        if (!Number.isFinite(mins) || mins <= 0 || mins > 43200) {
+          throw new AppError(
+            400,
+            'INVALID_EXPIRY',
+            'expiresInMinutes must be between 1 and 43200 minutes (30 days).'
+          );
+        }
+        expiresAt = new Date(Date.now() + Math.round(mins) * 60_000).toISOString();
+      }
 
       const { data: created, error } = await adminClient
         .from('payment_requests')
@@ -93,6 +132,7 @@ Deno.serve(async (req: Request) => {
           recipient_address: recipientAddress,
           description,
           terms,
+          expires_at: expiresAt,
           status: 'open',
         })
         .select('*')

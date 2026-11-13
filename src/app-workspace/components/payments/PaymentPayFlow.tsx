@@ -14,6 +14,7 @@ import {
 import { Button } from '../../../components/ui/Button';
 import type { PaymentRecord, PaymentRequestData, WalletState } from '../../types';
 import {
+  fetchPaymentRequestByCode,
   preparePayment,
   verifyBlockchainReceipt,
 } from '../../../services/paymentsService';
@@ -67,6 +68,9 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
   const [step, setStep] = useState<PayStep>(initialRequest ? 'received' : 'scan');
   const [request, setRequest] = useState<PaymentRequestData>(initialRequest || SAMPLE_REQUEST);
   const [scanInput, setScanInput] = useState('');
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [tamperError, setTamperError] = useState<string | null>(null);
   const [verificationState, setVerificationState] = useState<
     'verified' | 'mismatch' | 'unverified'
   >('verified');
@@ -259,6 +263,87 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     }
   };
 
+  const handleOpenScannedInput = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setScanError(null);
+    setTamperError(null);
+    const raw = scanInput.trim();
+    if (!raw) {
+      setRequest(SAMPLE_REQUEST);
+      setStep('received');
+      return;
+    }
+
+    let parsedPayload: Partial<PaymentRequestData> | null = null;
+    let shareCode: string | null = null;
+
+    if (raw.startsWith('{')) {
+      try {
+        parsedPayload = JSON.parse(raw) as Partial<PaymentRequestData>;
+        if (parsedPayload.shareCode) shareCode = parsedPayload.shareCode;
+      } catch {
+        setScanError('Invalid QR JSON payload.');
+        return;
+      }
+    } else {
+      const codeMatch = raw.match(/WRD-[A-Z0-9]+/i);
+      if (codeMatch) {
+        shareCode = codeMatch[0].toUpperCase();
+      }
+    }
+
+    if (!shareCode) {
+      setScanError('Enter a valid Word payment link or share code (e.g. WRD-...).');
+      return;
+    }
+
+    setScanLoading(true);
+    try {
+      const row = await fetchPaymentRequestByCode(shareCode);
+      const authoritative: PaymentRequestData = {
+        id: row.id,
+        shareCode: row.share_code,
+        amount: String(row.amount_numeric),
+        token: row.token_symbol,
+        network: row.network,
+        recipientName: row.recipient_name,
+        recipientAddress: row.recipient_address,
+        description: row.description,
+        terms: row.terms ?? undefined,
+        shareUrl: `${window.location.origin}/app?pay=${row.share_code}`,
+        expiresAt: row.expires_at,
+        status:
+          row.status === 'completed' ||
+          row.status === 'cancelled' ||
+          row.status === 'expired'
+            ? row.status
+            : 'open',
+      };
+
+      if (parsedPayload) {
+        const mismatch =
+          (parsedPayload.amount && Number(parsedPayload.amount) !== Number(authoritative.amount)) ||
+          (parsedPayload.recipientAddress &&
+            parsedPayload.recipientAddress.toLowerCase() !==
+              authoritative.recipientAddress.toLowerCase()) ||
+          (parsedPayload.token && parsedPayload.token !== authoritative.token) ||
+          (parsedPayload.network && parsedPayload.network !== authoritative.network);
+        if (mismatch) {
+          setTamperError(
+            'This scanned request payload was altered and does not match the authoritative Word record.'
+          );
+        }
+      }
+
+      setRequest(authoritative);
+      setStep('received');
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Payment request not found.');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   // 1. SCAN QR CODE
   if (step === 'scan') {
     return (
@@ -276,8 +361,8 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           Scan or paste a payment request.
         </h1>
         <p className="body-md" style={{ marginBottom: '22px' }}>
-          Point your camera at a Word payment QR code, or load a sample request below to preview the
-          full verification and approval flow.
+          Paste a Word payment link or share code (`WRD-...`) to fetch and verify the
+          authoritative request, or load the sample preview below.
         </p>
 
         <div
@@ -300,6 +385,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           <Button
             compact
             onClick={() => {
+              setTamperError(null);
               setRequest(SAMPLE_REQUEST);
               setStep('received');
             }}
@@ -309,32 +395,30 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
         </div>
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setRequest({
-              ...SAMPLE_REQUEST,
-              shareUrl: scanInput.trim() || SAMPLE_REQUEST.shareUrl,
-            });
-            setStep('received');
-          }}
+          onSubmit={handleOpenScannedInput}
           style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
         >
           <div className="field-group">
             <label className="field-label" htmlFor="scan-link">
-              Or paste payment request link
+              Or paste payment request link or code
             </label>
             <input
               id="scan-link"
               type="text"
               className="field-input"
-              placeholder="https://word.app/pay/req-thabo-20"
+              placeholder="https://.../app?pay=WRD-XXXXXXXXXX or WRD-XXXXXXXXXX"
               value={scanInput}
               onChange={(e) => setScanInput(e.target.value)}
             />
           </div>
+          {scanError && (
+            <p role="alert" className="body-sm" style={{ color: '#b42318' }}>
+              {scanError}
+            </p>
+          )}
           <div>
-            <Button type="submit" compact>
-              Open request <ArrowRight size={14} />
+            <Button type="submit" compact disabled={scanLoading}>
+              {scanLoading ? 'Verifying request...' : 'Open request'} <ArrowRight size={14} />
             </Button>
           </div>
         </form>
@@ -344,6 +428,21 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
 
   // 2. REVIEW RECEIVED PAYMENT REQUEST
   if (step === 'received') {
+    const isExpired =
+      request.status === 'expired' ||
+      Boolean(request.expiresAt && new Date(request.expiresAt).getTime() <= Date.now());
+    const isCancelled = request.status === 'cancelled';
+    const isCompleted = request.status === 'completed';
+    const invalidReason = tamperError
+      ? tamperError
+      : isExpired
+        ? 'This payment request has expired and can no longer be paid.'
+        : isCancelled
+          ? 'This payment request was cancelled by the recipient.'
+          : isCompleted
+            ? 'This payment request has already been completed.'
+            : null;
+
     return (
       <div className="ws-card" style={{ maxWidth: '640px' }}>
         <p className="eyebrow" style={{ marginBottom: '8px' }}>
@@ -355,6 +454,20 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
         <p className="body-md" style={{ marginBottom: '22px' }}>
           Review the requested payment details before running recipient and risk checks.
         </p>
+
+        {invalidReason && (
+          <div
+            className="ws-notice"
+            style={{
+              marginBottom: '18px',
+              borderColor: '#fecdca',
+              backgroundColor: '#fef3f2',
+              color: '#b42318',
+            }}
+          >
+            <strong>Invalid request:</strong> {invalidReason}
+          </div>
+        )}
 
         <div
           style={{
@@ -380,6 +493,12 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
             <span className="record-key">Description</span>
             <span className="record-val">{request.description}</span>
           </div>
+          {request.expiresAt && (
+            <div className="record-row">
+              <span className="record-key">Expires</span>
+              <span className="record-val">{new Date(request.expiresAt).toLocaleString()}</span>
+            </div>
+          )}
           {request.terms && (
             <div className="record-row">
               <span className="record-key">Payment terms</span>
@@ -394,7 +513,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           <button type="button" className="auth-back-link" onClick={() => setStep('scan')}>
             <ArrowLeft size={15} /> Back
           </button>
-          <Button onClick={() => setStep('verify')}>
+          <Button disabled={Boolean(invalidReason)} onClick={() => setStep('verify')}>
             Verify recipient <ArrowRight size={14} />
           </Button>
         </div>
