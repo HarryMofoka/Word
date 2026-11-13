@@ -1,18 +1,18 @@
 import React, { useEffect } from 'react';
-import type { AuthModalMode, NavLinkItem } from '../../types';
+import type { AppRoute, NavLinkItem } from '../../types';
 
 interface MobileMenuProps {
   isOpen: boolean;
   links: NavLinkItem[];
   onClose: () => void;
-  onOpenAuth: (mode: AuthModalMode) => void;
+  onNavigate: (route: AppRoute, hash?: string) => void;
 }
 
 export const MobileMenu: React.FC<MobileMenuProps> = ({
   isOpen,
   links,
   onClose,
-  onOpenAuth,
+  onNavigate,
 }) => {
   useEffect(() => {
     if (!isOpen) return;
@@ -33,7 +33,11 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             key={link.href}
             href={link.href}
             className="mobile-menu-link"
-            onClick={onClose}
+            onClick={(e) => {
+              e.preventDefault();
+              onClose();
+              onNavigate('home', link.href);
+            }}
           >
             {link.label}
           </a>
@@ -45,7 +49,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           className="navbar-signin"
           onClick={() => {
             onClose();
-            onOpenAuth('get-started');
+            onNavigate('signup');
           }}
         >
           Get started
@@ -55,7 +59,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           className="navbar-get-started"
           onClick={() => {
             onClose();
-            onOpenAuth('signin');
+            onNavigate('signin');
           }}
         >
           Sign in
@@ -64,4 +68,3 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     </div>
   );
 };
-

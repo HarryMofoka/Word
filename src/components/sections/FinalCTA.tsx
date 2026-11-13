@@ -1,16 +1,16 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
-import type { AuthModalMode } from '../../types';
+import type { AppRoute } from '../../types';
 import { Container } from '../layout/Container';
 import { Section } from '../layout/Section';
 import { Button } from '../ui/Button';
 import './Sections.css';
 
 interface FinalCTAProps {
-  onOpenAuth: (mode: AuthModalMode) => void;
+  onNavigate: (route: AppRoute) => void;
 }
 
-export const FinalCTA: React.FC<FinalCTAProps> = ({ onOpenAuth }) => {
+export const FinalCTA: React.FC<FinalCTAProps> = ({ onNavigate }) => {
   return (
     <Section className="final-cta" variant="soft">
       <div className="final-cta-dots dot-motif" aria-hidden="true" />
@@ -36,7 +36,7 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({ onOpenAuth }) => {
               flexWrap: 'wrap',
             }}
           >
-            <Button onClick={() => onOpenAuth('get-started')}>Get started</Button>
+            <Button onClick={() => onNavigate('signup')}>Get started</Button>
             <a href="#how-it-works" className="text-link">
               Explore how it works <ArrowRight size={14} />
             </a>
@@ -46,4 +46,3 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({ onOpenAuth }) => {
     </Section>
   );
 };
-

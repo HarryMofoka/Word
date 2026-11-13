@@ -1,9 +1,24 @@
 import React from 'react';
+import type { AppRoute } from '../../types';
 import { Container } from '../layout/Container';
 import { WordLogo } from '../ui/WordLogo';
 import './Footer.css';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigate: (route: AppRoute, hash?: string) => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+  const handleAnchor = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    e.preventDefault();
+    onNavigate('home', hash);
+  };
+
+  const handleRoute = (e: React.MouseEvent<HTMLAnchorElement>, route: AppRoute) => {
+    e.preventDefault();
+    onNavigate(route);
+  };
+
   return (
     <footer className="footer">
       <Container>
@@ -11,6 +26,7 @@ export const Footer: React.FC = () => {
           <div>
             <a
               href="#top"
+              onClick={(e) => handleAnchor(e, '#top')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -35,27 +51,47 @@ export const Footer: React.FC = () => {
             <p className="footer-col-title">Product</p>
             <ul className="footer-links">
               <li>
-                <a href="#how-it-works" className="footer-link">
+                <a
+                  href="#how-it-works"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#how-it-works')}
+                >
                   How it works
                 </a>
               </li>
               <li>
-                <a href="#features" className="footer-link">
+                <a
+                  href="#features"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#features')}
+                >
                   Features
                 </a>
               </li>
               <li>
-                <a href="#security" className="footer-link">
+                <a
+                  href="#security"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#security')}
+                >
                   Security
                 </a>
               </li>
               <li>
-                <a href="#assistant" className="footer-link">
+                <a
+                  href="#assistant"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#assistant')}
+                >
                   AI assistant
                 </a>
               </li>
               <li>
-                <a href="#accountability" className="footer-link">
+                <a
+                  href="#accountability"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#accountability')}
+                >
                   Payment records
                 </a>
               </li>
@@ -66,12 +102,29 @@ export const Footer: React.FC = () => {
             <p className="footer-col-title">Company</p>
             <ul className="footer-links">
               <li>
-                <a href="#problem" className="footer-link">
+                <a
+                  href="/about"
+                  className="footer-link"
+                  onClick={(e) => handleRoute(e, 'about')}
+                >
                   About Word
                 </a>
               </li>
               <li>
-                <a href="#ecosystem" className="footer-link">
+                <a
+                  href="/contact"
+                  className="footer-link"
+                  onClick={(e) => handleRoute(e, 'contact')}
+                >
+                  Contact
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#ecosystem"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#ecosystem')}
+                >
                   Hackathon information
                 </a>
               </li>
@@ -82,8 +135,39 @@ export const Footer: React.FC = () => {
             <p className="footer-col-title">Resources</p>
             <ul className="footer-links">
               <li>
-                <a href="#faq" className="footer-link">
+                <a
+                  href="#faq"
+                  className="footer-link"
+                  onClick={(e) => handleAnchor(e, '#faq')}
+                >
                   Frequently asked questions
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/docs"
+                  className="footer-link"
+                  onClick={(e) => handleRoute(e, 'docs')}
+                >
+                  Documentation
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/privacy"
+                  className="footer-link"
+                  onClick={(e) => handleRoute(e, 'privacy')}
+                >
+                  Privacy policy
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/terms"
+                  className="footer-link"
+                  onClick={(e) => handleRoute(e, 'terms')}
+                >
+                  Terms of service
                 </a>
               </li>
             </ul>
@@ -101,4 +185,3 @@ export const Footer: React.FC = () => {
     </footer>
   );
 };
-

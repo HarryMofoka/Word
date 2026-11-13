@@ -1,4 +1,12 @@
-export type AuthModalMode = 'signin' | 'get-started' | null;
+export type AppRoute =
+  | 'home'
+  | 'signin'
+  | 'signup'
+  | 'about'
+  | 'contact'
+  | 'docs'
+  | 'privacy'
+  | 'terms';
 
 export interface NavLinkItem {
   label: string;
@@ -17,4 +25,3 @@ export interface FeatureItemData {
   title: string;
   description: string;
 }
-

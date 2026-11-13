@@ -1,0 +1,232 @@
+/* ==========================================================================
+   FULL-SCREEN AUTH PAGES (SIGN IN = LEFT FROSTED, SIGN UP = RIGHT FROSTED)
+   ========================================================================== */
+
+.auth-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: var(--bg);
+  overflow: hidden;
+  display: flex;
+}
+
+.auth-screen--signup {
+  justify-content: flex-end;
+}
+
+.auth-screen--signin {
+  justify-content: flex-start;
+}
+
+.auth-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.auth-frosted-pane {
+  position: relative;
+  z-index: 2;
+  width: min(560px, 50vw);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: rgba(247, 247, 245, 0.78);
+  backdrop-filter: blur(24px) saturate(1.1);
+  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  padding: clamp(28px, 4vw, 56px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.auth-screen--signin .auth-frosted-pane {
+  border-right: 1px solid var(--line);
+}
+
+.auth-screen--signup .auth-frosted-pane {
+  border-left: 1px solid var(--line);
+}
+
+.auth-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.auth-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--sub);
+  background: transparent;
+  border: none;
+  padding: 6px 0;
+  transition: color 0.2s ease;
+}
+
+.auth-back-link:hover {
+  color: var(--ink);
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 400px;
+  margin-block: 36px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.field-input,
+.field-textarea {
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.field-input:focus,
+.field-textarea:focus {
+  outline: none;
+  border-color: var(--ink);
+  background-color: var(--white);
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.auth-status-banner {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.85);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.auth-footer-note {
+  font-size: 12.5px;
+  color: var(--mute);
+  line-height: 1.55;
+}
+
+/* ==========================================================================
+   FROSTED GLASS INFO PAGES (ABOUT, CONTACT, DOCS, PRIVACY, TERMS)
+   ========================================================================== */
+
+.frosted-page {
+  position: relative;
+  min-height: calc(100vh - 68px);
+  background-color: var(--bg);
+  padding-block: clamp(48px, 7vw, 88px);
+  overflow: hidden;
+}
+
+.frosted-page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.frosted-surface {
+  position: relative;
+  z-index: 2;
+  background-color: rgba(247, 247, 245, 0.78);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: clamp(28px, 5vw, 56px);
+}
+
+.frosted-header {
+  max-width: 680px;
+  margin-bottom: 40px;
+}
+
+.frosted-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 40px;
+}
+
+.frosted-photo-card {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background-color: var(--white);
+}
+
+.frosted-photo-card img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.88) contrast(0.98);
+}
+
+.frosted-photo-caption {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--sub);
+  border-top: 1px solid var(--line);
+}
+
+.frosted-blocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.frosted-block h2 {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .auth-frosted-pane {
+    width: 100%;
+    border-left: none !important;
+    border-right: none !important;
+    background-color: rgba(247, 247, 245, 0.86);
+  }
+
+  .frosted-media-grid,
+  .frosted-blocks {
+    grid-template-columns: 1fr;
+  }
+}

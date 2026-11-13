@@ -1,16 +1,16 @@
 import React from 'react';
 import { ArrowDown } from 'lucide-react';
-import type { AuthModalMode } from '../../types';
+import type { AppRoute } from '../../types';
 import { Button } from '../ui/Button';
 import { HeroCanvas } from './HeroCanvas';
 import { DotMatrixHands } from './DotMatrixHands';
 import './Hero.css';
 
 interface HeroProps {
-  onOpenAuth: (mode: AuthModalMode) => void;
+  onNavigate: (route: AppRoute) => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
+export const Hero: React.FC<HeroProps> = ({ onNavigate }) => {
   return (
     <section id="top" className="hero" aria-label="Word hero">
       <HeroCanvas />
@@ -31,7 +31,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           </p>
 
           <div className="hero-actions">
-            <Button onClick={() => onOpenAuth('get-started')}>Get started</Button>
+            <Button onClick={() => onNavigate('signup')}>Get started</Button>
             <a href="#how-it-works" className="text-link">
               How it works <ArrowDown size={14} />
             </a>
@@ -41,4 +41,3 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
     </section>
   );
 };
-
