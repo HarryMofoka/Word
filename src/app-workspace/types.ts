@@ -9,10 +9,28 @@ export type OnboardingStep =
 export type WorkspaceTab =
   | 'dashboard'
   | 'payments'
+  | 'records'
   | 'wallet'
   | 'notifications'
   | 'profile'
   | 'settings';
+
+export interface EvidenceItem {
+  id: string;
+  label: string;
+  note: string;
+  addedAt: string;
+}
+
+export interface DisputeCase {
+  id: string;
+  recordId: string;
+  reason: string;
+  summary: string;
+  status: 'Open' | 'Evidence Submitted' | 'Under Review';
+  createdAt: string;
+  evidence: EvidenceItem[];
+}
 
 export type PaymentFlowMode = 'hub' | 'create-request' | 'scan-pay';
 

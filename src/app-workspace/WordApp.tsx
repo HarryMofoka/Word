@@ -5,6 +5,7 @@ import { Container } from '../components/layout/Container';
 import { WordLogo } from '../components/ui/WordLogo';
 import type {
   AppNotification,
+  DisputeCase,
   OnboardingStep,
   PaymentRecord,
   UserSession,
@@ -22,6 +23,7 @@ import { NotificationsView } from './components/NotificationsView';
 import { ProfileView } from './components/ProfileView';
 import { SettingsView } from './components/SettingsView';
 import { PaymentsHub } from './components/payments/PaymentsHub';
+import { AccountabilityHub } from './components/accountability/AccountabilityHub';
 import './Workspace.css';
 
 interface WordAppProps {
@@ -88,6 +90,7 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
 const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'payments', label: 'Payments' },
+  { id: 'records', label: 'Records' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'profile', label: 'Profile' },
@@ -114,6 +117,22 @@ export const WordApp: React.FC<WordAppProps> = ({
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [records, setRecords] = useState<PaymentRecord[]>(INITIAL_RECORDS);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [disputes, setDisputes] = useState<Record<string, DisputeCase>>({});
+
+  const handleSaveDispute = (dispute: DisputeCase) => {
+    setDisputes((prev) => ({ ...prev, [dispute.recordId]: dispute }));
+    setNotifications((prev) => [
+      {
+        id: `n-dsp-${Date.now()}`,
+        title: `Dispute ${dispute.status.toLowerCase()}`,
+        detail: `${dispute.reason} (Record ${dispute.recordId})`,
+        time: 'Just now',
+        category: 'Verification',
+        read: false,
+      },
+      ...prev,
+    ]);
+  };
 
   const updateWallet = (next: WalletState) => {
     setWallet(next);
@@ -317,6 +336,14 @@ export const WordApp: React.FC<WordAppProps> = ({
                     wallet={wallet}
                     onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
                     onDoneToDashboard={() => setActiveTab('dashboard')}
+                  />
+                )}
+
+                {activeTab === 'records' && (
+                  <AccountabilityHub
+                    records={records}
+                    disputes={disputes}
+                    onSaveDispute={handleSaveDispute}
                   />
                 )}
 
