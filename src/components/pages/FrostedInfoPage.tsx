@@ -284,3 +284,4 @@ export const FrostedInfoPage: React.FC<FrostedInfoPageProps> = ({ route, onNavig
     </div>
   );
 };
+

@@ -174,3 +174,4 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
     </div>
   );
 };
+
