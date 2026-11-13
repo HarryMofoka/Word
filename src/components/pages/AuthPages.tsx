@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { AppRoute } from '../../types';
+import type { UserSession } from '../../app-workspace/types';
 import { HeroCanvas } from '../hero/HeroCanvas';
 import { DotMatrixHands } from '../hero/DotMatrixHands';
 import { WordLogo } from '../ui/WordLogo';
@@ -10,19 +11,31 @@ import './Pages.css';
 interface AuthPageProps {
   mode: 'signin' | 'signup';
   onNavigate: (route: AppRoute) => void;
+  onAuthenticated: (session: UserSession) => void;
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
+export const AuthPage: React.FC<AuthPageProps> = ({
+  mode,
+  onNavigate,
+  onAuthenticated,
+}) => {
   const isSignIn = mode === 'signin';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    const derivedName =
+      name.trim() ||
+      (email.includes('@') ? email.split('@')[0] : 'Word User');
+
+    onAuthenticated({
+      displayName: derivedName,
+      email: email.trim(),
+      isNewUser: !isSignIn,
+    });
   };
 
   return (
@@ -93,10 +106,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
                   className="field-input"
                   placeholder="e.g. Thabo M."
                   value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setSubmitted(false);
-                  }}
+                  onChange={(e) => setName(e.target.value)}
                   required
                 />
               </div>
@@ -112,10 +122,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
                 className="field-input"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setSubmitted(false);
-                }}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
@@ -130,10 +137,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
                 className="field-input"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setSubmitted(false);
-                }}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
               />
@@ -148,22 +152,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onNavigate }) => {
                 type="button"
                 className="text-link"
                 style={{ background: 'transparent', border: 'none' }}
-                onClick={() => {
-                  setSubmitted(false);
-                  onNavigate(isSignIn ? 'signup' : 'signin');
-                }}
+                onClick={() => onNavigate(isSignIn ? 'signup' : 'signin')}
               >
                 {isSignIn ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
               </button>
             </div>
           </form>
-
-          {submitted && (
-            <div className="auth-status-banner" role="status">
-              <strong>Demonstration preview:</strong> No live authentication backend or wallet
-              session is connected in this static frontend build. Your details were not transmitted.
-            </div>
-          )}
         </div>
 
         <p className="auth-footer-note">

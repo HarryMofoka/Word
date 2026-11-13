@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { AppRoute } from '../types';
+import type { UserSession, WalletState } from '../app-workspace/types';
 import { Navbar } from '../components/navigation/Navbar';
 import { Hero } from '../components/hero/Hero';
 import { Problem } from '../components/sections/Problem';
@@ -15,6 +16,19 @@ import { FinalCTA } from '../components/sections/FinalCTA';
 import { Footer } from '../components/footer/Footer';
 import { AuthPage } from '../components/pages/AuthPages';
 import { FrostedInfoPage } from '../components/pages/FrostedInfoPage';
+import { WordApp } from '../app-workspace/WordApp';
+
+const SESSION_KEY = 'word_demo_session';
+const WALLET_KEY = 'word_demo_wallet';
+
+function readStoredJSON<T>(key: string): T | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
 
 function getRouteFromPath(pathname: string): AppRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
@@ -23,6 +37,8 @@ function getRouteFromPath(pathname: string): AppRoute {
       return 'signin';
     case '/signup':
       return 'signup';
+    case '/app':
+      return 'app';
     case '/about':
       return 'about';
     case '/contact':
@@ -45,6 +61,12 @@ function getPathFromRoute(route: AppRoute): string {
 export const App: React.FC = () => {
   const [route, setRoute] = useState<AppRoute>(() =>
     getRouteFromPath(typeof window !== 'undefined' ? window.location.pathname : '/')
+  );
+  const [session, setSession] = useState<UserSession | null>(() =>
+    typeof window !== 'undefined' ? readStoredJSON<UserSession>(SESSION_KEY) : null
+  );
+  const [wallet, setWallet] = useState<WalletState | null>(() =>
+    typeof window !== 'undefined' ? readStoredJSON<WalletState>(WALLET_KEY) : null
   );
 
   useEffect(() => {
@@ -76,11 +98,78 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Full-screen Sign In (left frosted) or Sign Up (right frosted)
-  if (route === 'signin' || route === 'signup') {
-    return <AuthPage mode={route} onNavigate={navigate} />;
+  const handleAuthenticated = useCallback(
+    (newSession: UserSession) => {
+      setSession(newSession);
+      try {
+        window.localStorage.setItem(SESSION_KEY, JSON.stringify(newSession));
+      } catch {
+        // ignore storage quota errors
+      }
+      navigate('app');
+    },
+    [navigate]
+  );
+
+  const handleWalletChange = useCallback((nextWallet: WalletState | null) => {
+    setWallet(nextWallet);
+    try {
+      if (nextWallet) {
+        window.localStorage.setItem(WALLET_KEY, JSON.stringify(nextWallet));
+      } else {
+        window.localStorage.removeItem(WALLET_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setSession(null);
+    setWallet(null);
+    try {
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(WALLET_KEY);
+    } catch {
+      // ignore storage errors
+    }
+    navigate('signin');
+  }, [navigate]);
+
+  // Separate Word App Workspace (linked after Sign in / Sign up)
+  if (route === 'app') {
+    if (!session) {
+      return (
+        <AuthPage
+          mode="signin"
+          onNavigate={navigate}
+          onAuthenticated={handleAuthenticated}
+        />
+      );
+    }
+    return (
+      <WordApp
+        session={session}
+        initialWallet={wallet}
+        onWalletChange={handleWalletChange}
+        onLogout={handleLogout}
+        onNavigateMarketing={navigate}
+      />
+    );
   }
 
+  // Full-screen Sign In (left frosted) or Sign Up (right frosted)
+  if (route === 'signin' || route === 'signup') {
+    return (
+      <AuthPage
+        mode={route}
+        onNavigate={navigate}
+        onAuthenticated={handleAuthenticated}
+      />
+    );
+  }
+
+  // Marketing Website
   return (
     <>
       <Navbar onNavigate={navigate} />

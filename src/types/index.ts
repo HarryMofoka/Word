@@ -2,6 +2,7 @@ export type AppRoute =
   | 'home'
   | 'signin'
   | 'signup'
+  | 'app'
   | 'about'
   | 'contact'
   | 'docs'

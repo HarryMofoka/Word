@@ -8,7 +8,7 @@ import { Button } from '../ui/Button';
 import './Pages.css';
 
 interface FrostedInfoPageProps {
-  route: Exclude<AppRoute, 'home' | 'signin' | 'signup'>;
+  route: Exclude<AppRoute, 'home' | 'signin' | 'signup' | 'app'>;
   onNavigate: (route: AppRoute) => void;
 }
 
@@ -20,7 +20,7 @@ interface PageContent {
   blocks: { heading: string; body: string }[];
 }
 
-const PAGE_DATA: Record<Exclude<AppRoute, 'home' | 'signin' | 'signup'>, PageContent> = {
+const PAGE_DATA: Record<Exclude<AppRoute, 'home' | 'signin' | 'signup' | 'app'>, PageContent> = {
   about: {
     eyebrow: 'ABOUT WORD',
     title: 'Trust-first peer-to-peer payments.',
