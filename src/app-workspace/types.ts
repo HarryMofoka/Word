@@ -10,6 +10,7 @@ export type WorkspaceTab =
   | 'dashboard'
   | 'payments'
   | 'records'
+  | 'assistant'
   | 'wallet'
   | 'notifications'
   | 'profile'

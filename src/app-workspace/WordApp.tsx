@@ -24,6 +24,7 @@ import { ProfileView } from './components/ProfileView';
 import { SettingsView } from './components/SettingsView';
 import { PaymentsHub } from './components/payments/PaymentsHub';
 import { AccountabilityHub } from './components/accountability/AccountabilityHub';
+import { AssistantRiskHub } from './components/advanced/AssistantRiskHub';
 import './Workspace.css';
 
 interface WordAppProps {
@@ -91,6 +92,7 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'payments', label: 'Payments' },
   { id: 'records', label: 'Records' },
+  { id: 'assistant', label: 'Assistant' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'profile', label: 'Profile' },
@@ -346,6 +348,8 @@ export const WordApp: React.FC<WordAppProps> = ({
                     onSaveDispute={handleSaveDispute}
                   />
                 )}
+
+                {activeTab === 'assistant' && <AssistantRiskHub />}
 
                 {activeTab === 'wallet' && (
                   <WalletOverviewView
