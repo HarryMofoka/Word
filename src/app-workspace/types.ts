@@ -78,6 +78,7 @@ export interface PaymentRecord {
   status: 'Confirmed' | 'Pending' | 'Failed';
   verifiedControl: boolean;
   timestamp: string;
+  txHash?: string;
 }
 
 export interface AppNotification {

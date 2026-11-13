@@ -83,6 +83,8 @@ export async function preparePayment(params: {
 export async function verifyBlockchainReceipt(params: {
   transactionId: string;
   txHash: string;
+  awaitingConfirmation?: boolean;
+  outcome?: 'confirmed' | 'failed';
   simulateFailure?: boolean;
 }): Promise<{ transaction: TransactionRow; verified: boolean }> {
   return callEdgeFunction('receipt-verify', {

@@ -56,10 +56,49 @@ Deno.serve(async (req: Request) => {
       if (!reqRow) {
         throw new AppError(404, 'REQUEST_NOT_FOUND', 'Linked payment request not found.');
       }
-      if (reqRow.status === 'cancelled' || reqRow.status === 'expired') {
+      if (reqRow.status === 'cancelled' || reqRow.status === 'expired' || reqRow.status === 'completed') {
         throw new AppError(400, 'REQUEST_UNAVAILABLE', `Payment request is ${reqRow.status}.`);
       }
       recipientId = reqRow.creator_id;
+
+      const { data: existingReqTx } = await adminClient
+        .from('transactions')
+        .select('id, status')
+        .eq('sender_id', user.id)
+        .eq('payment_request_id', paymentRequestId)
+        .in('status', ['pending', 'processing', 'confirmed'])
+        .limit(1)
+        .maybeSingle();
+
+      if (existingReqTx) {
+        throw new AppError(
+          409,
+          'DUPLICATE_SUBMISSION',
+          `A payment for this request is already ${existingReqTx.status}.`
+        );
+      }
+    }
+
+    const recentWindowIso = new Date(Date.now() - 60 * 1000).toISOString();
+    const { data: recentDup } = await adminClient
+      .from('transactions')
+      .select('id, status')
+      .eq('sender_id', user.id)
+      .eq('recipient_address', recipientAddress)
+      .eq('amount_atomic', atomic)
+      .eq('token_symbol', tokenSymbol)
+      .eq('network', network)
+      .in('status', ['pending', 'processing'])
+      .gte('created_at', recentWindowIso)
+      .limit(1)
+      .maybeSingle();
+
+    if (recentDup) {
+      throw new AppError(
+        409,
+        'DUPLICATE_SUBMISSION',
+        'A matching payment is already pending or processing. Please wait for confirmation.'
+      );
     }
 
     const { data: transaction, error } = await adminClient

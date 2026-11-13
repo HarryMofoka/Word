@@ -1,11 +1,20 @@
 import WDK from '@tetherto/wdk';
 import WalletManagerEvm, { WalletAccountReadOnlyEvm } from '@tetherto/wdk-wallet-evm';
-import { BrowserProvider, JsonRpcProvider, formatEther, formatUnits } from 'ethers';
+import {
+  BrowserProvider,
+  Contract,
+  JsonRpcProvider,
+  formatEther,
+  formatUnits,
+  parseEther,
+  parseUnits,
+} from 'ethers';
 import {
   DEFAULT_DEMO_NETWORK,
   NETWORK_CONFIGS,
   getNetworkByChainId,
   getNetworkConfig,
+  validateTokenCompatibility,
   validateWalletAddress,
   type NetworkConfig,
   type SupportedNetworkName,
@@ -349,4 +358,229 @@ export async function estimateWdkGasFee(
   } catch {
     return `~0.0001 ${cfg.nativeSymbol}`;
   }
+}
+
+export interface TransferQuote {
+  senderTokenBalance: string;
+  senderNativeBalance: string;
+  nativeSymbol: string;
+  estimatedFeeNative: string;
+  totalCostDisplay: string;
+  hasSufficientBalance: boolean;
+  insufficientReason?: string;
+}
+
+export async function quoteTransferCost(params: {
+  senderAddress: string;
+  recipientAddress: string;
+  amount: string;
+  tokenSymbol: string;
+  network: string;
+}): Promise<TransferQuote> {
+  const cfg = getNetworkConfig(params.network);
+  const tokenCheck = validateTokenCompatibility(params.tokenSymbol, cfg.name);
+  if (!tokenCheck.compatible || !tokenCheck.config) {
+    return {
+      senderTokenBalance: '0.00',
+      senderNativeBalance: '0.00',
+      nativeSymbol: cfg.nativeSymbol,
+      estimatedFeeNative: `~0.0001 ${cfg.nativeSymbol}`,
+      totalCostDisplay: `${params.amount} ${params.tokenSymbol}`,
+      hasSufficientBalance: false,
+      insufficientReason: tokenCheck.reason,
+    };
+  }
+
+  const tokenCfg = tokenCheck.config;
+  const provider = new JsonRpcProvider(cfg.rpcUrl);
+  const readOnly = new WalletAccountReadOnlyEvm(params.senderAddress, {
+    provider: cfg.rpcUrl,
+  });
+
+  const [nativeWei, feeData] = await Promise.all([
+    readOnly.getBalance().catch(() => 0n),
+    provider.getFeeData().catch(() => ({ gasPrice: 1_500_000_000n })),
+  ]);
+
+  const gasUnits = tokenCfg.isNative ? 21_000n : 65_000n;
+  const gasPrice = feeData.gasPrice ?? 1_500_000_000n;
+  const feeWei = gasPrice * gasUnits;
+  const feeDisplay = `${formatFixedDisplay(formatEther(feeWei), 6)} ${cfg.nativeSymbol}`;
+  const nativeDisplay = formatFixedDisplay(formatEther(nativeWei), 4);
+
+  let tokenRaw = nativeWei;
+  if (!tokenCfg.isNative && tokenCfg.contractAddress) {
+    tokenRaw = await readOnly.getTokenBalance(tokenCfg.contractAddress).catch(() => 0n);
+  }
+  const tokenBalanceDisplay = formatFixedDisplay(
+    formatUnits(tokenRaw, tokenCfg.decimals),
+    tokenCfg.isNative ? 4 : 2
+  );
+
+  const requiredAtomic = parseUnits(params.amount || '0', tokenCfg.decimals);
+  let hasSufficientBalance = true;
+  let insufficientReason: string | undefined;
+
+  if (tokenCfg.isNative) {
+    if (nativeWei < requiredAtomic + feeWei) {
+      hasSufficientBalance = false;
+      insufficientReason = `Insufficient ${cfg.nativeSymbol} for amount + gas fee (${nativeDisplay} ${cfg.nativeSymbol} available).`;
+    }
+  } else {
+    if (tokenRaw < requiredAtomic) {
+      hasSufficientBalance = false;
+      insufficientReason = `Insufficient ${tokenCfg.symbol} balance (${tokenBalanceDisplay} ${tokenCfg.symbol} available).`;
+    } else if (nativeWei < feeWei) {
+      hasSufficientBalance = false;
+      insufficientReason = `Insufficient ${cfg.nativeSymbol} for gas fee (${nativeDisplay} ${cfg.nativeSymbol} available).`;
+    }
+  }
+
+  const totalCostDisplay = tokenCfg.isNative
+    ? `${formatFixedDisplay(formatEther(requiredAtomic + feeWei), 6)} ${cfg.nativeSymbol}`
+    : `${params.amount} ${tokenCfg.symbol} + ${feeDisplay}`;
+
+  return {
+    senderTokenBalance: tokenBalanceDisplay,
+    senderNativeBalance: nativeDisplay,
+    nativeSymbol: cfg.nativeSymbol,
+    estimatedFeeNative: feeDisplay,
+    totalCostDisplay,
+    hasSufficientBalance,
+    insufficientReason,
+  };
+}
+
+export async function executeOnChainPayment(params: {
+  senderAddress: string;
+  recipientAddress: string;
+  amount: string;
+  tokenSymbol: string;
+  network: string;
+  walletMethod: 'created' | 'connected' | 'imported';
+  signingPhrase?: string;
+}): Promise<{ txHash: string }> {
+  const cfg = getNetworkConfig(params.network);
+  const addrCheck = validateWalletAddress(params.recipientAddress, 'Recipient address');
+  if (!addrCheck.valid) {
+    throw new WalletIntegrationError('INVALID_ADDRESS', addrCheck.reason ?? 'Invalid recipient address.');
+  }
+
+  const tokenCheck = validateTokenCompatibility(params.tokenSymbol, cfg.name);
+  if (!tokenCheck.compatible || !tokenCheck.config) {
+    throw new WalletIntegrationError(
+      'UNSUPPORTED_NETWORK',
+      tokenCheck.reason ?? 'Token not supported on this network.'
+    );
+  }
+  const tokenCfg = tokenCheck.config;
+
+  if (params.walletMethod === 'connected') {
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      throw new WalletIntegrationError(
+        'UNSUPPORTED_WALLET',
+        'Browser wallet provider not found.'
+      );
+    }
+    await switchBrowserNetwork(cfg.name);
+    const provider = new BrowserProvider(eth);
+    const signer = await provider.getSigner();
+
+    if (tokenCfg.isNative) {
+      const tx = await signer.sendTransaction({
+        to: params.recipientAddress,
+        value: parseEther(params.amount),
+      });
+      return { txHash: tx.hash };
+    }
+
+    if (!tokenCfg.contractAddress) {
+      throw new WalletIntegrationError('UNSUPPORTED_NETWORK', 'Token contract address is not configured.');
+    }
+
+    const erc20 = new Contract(
+      tokenCfg.contractAddress,
+      ['function transfer(address to, uint256 amount) returns (bool)'],
+      signer
+    );
+    const tx = await erc20.transfer(
+      params.recipientAddress,
+      parseUnits(params.amount, tokenCfg.decimals)
+    );
+    return { txHash: tx.hash };
+  }
+
+  // Created / Imported WDK wallet: sign locally in memory only; never persist or log phrase
+  const phrase = (params.signingPhrase ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!phrase || !WDK.isValidSeed(phrase)) {
+    throw new WalletIntegrationError(
+      'INVALID_SEED',
+      'Enter your valid 12 or 24-word recovery phrase to sign this transaction locally.'
+    );
+  }
+
+  const wdk = new WDK(phrase).registerWallet('ethereum', EvmManager, {
+    provider: cfg.rpcUrl,
+  } as never);
+
+  try {
+    const account = (await wdk.getAccount('ethereum', 0)) as unknown as {
+      getAddress: () => Promise<string>;
+      sendTransaction: (tx: { to: string; value: bigint }) => Promise<{ hash: string }>;
+      transfer: (opts: { token: string; recipient: string; amount: bigint }) => Promise<{ hash: string }>;
+    };
+    const derived = await account.getAddress();
+    if (derived.toLowerCase() !== params.senderAddress.toLowerCase()) {
+      throw new WalletIntegrationError(
+        'INVALID_SEED',
+        'The entered recovery phrase does not match your active wallet address.'
+      );
+    }
+
+    if (tokenCfg.isNative) {
+      const res = await account.sendTransaction({
+        to: params.recipientAddress,
+        value: parseEther(params.amount),
+      });
+      return { txHash: res.hash };
+    }
+
+    if (!tokenCfg.contractAddress) {
+      throw new WalletIntegrationError('UNSUPPORTED_NETWORK', 'Token contract address is not configured.');
+    }
+
+    const res = await account.transfer({
+      token: tokenCfg.contractAddress,
+      recipient: params.recipientAddress,
+      amount: parseUnits(params.amount, tokenCfg.decimals),
+    });
+    return { txHash: res.hash };
+  } finally {
+    wdk.dispose();
+  }
+}
+
+export async function pollTransactionReceipt(
+  txHash: string,
+  network: string = DEFAULT_DEMO_NETWORK,
+  timeoutMs = 20000
+): Promise<'confirmed' | 'failed' | 'pending'> {
+  const cfg = getNetworkConfig(network);
+  const provider = new JsonRpcProvider(cfg.rpcUrl);
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const receipt = await provider.getTransactionReceipt(txHash);
+      if (receipt) {
+        return receipt.status === 1 ? 'confirmed' : 'failed';
+      }
+    } catch {
+      // transient RPC error; retry until timeout
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+
+  return 'pending';
 }

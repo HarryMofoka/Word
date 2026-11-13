@@ -41,15 +41,20 @@ Deno.serve(async (req: Request) => {
     }
 
     const nowIso = new Date().toISOString();
-    const nextStatus = body.simulateFailure === true ? 'failed' : 'confirmed';
+    const requestedState =
+      body.awaitingConfirmation === true
+        ? 'processing'
+        : body.simulateFailure === true || body.outcome === 'failed'
+          ? 'failed'
+          : 'confirmed';
 
     const { data: updatedTx, error: updErr } = await adminClient
       .from('transactions')
       .update({
         tx_hash: txHash,
-        status: nextStatus,
+        status: requestedState,
         verified_control: true,
-        receipt_verified_at: nextStatus === 'confirmed' ? nowIso : null,
+        receipt_verified_at: requestedState === 'confirmed' ? nowIso : null,
       })
       .eq('id', transactionId)
       .select('*')
@@ -57,7 +62,18 @@ Deno.serve(async (req: Request) => {
 
     if (updErr) throw new AppError(500, 'VERIFY_UPDATE_FAILED', updErr.message);
 
-    if (nextStatus === 'confirmed' && tx.payment_request_id) {
+    if (requestedState === 'processing') {
+      await recordAuditLog(adminClient, {
+        actorUserId: user.id,
+        action: 'transaction.broadcasted',
+        resourceType: 'transactions',
+        resourceId: transactionId,
+        metadata: { txHash, network: tx.network },
+      });
+      return jsonResponse({ transaction: updatedTx, verified: false });
+    }
+
+    if (requestedState === 'confirmed' && tx.payment_request_id) {
       await adminClient
         .from('payment_requests')
         .update({ status: 'completed' })
@@ -71,31 +87,31 @@ Deno.serve(async (req: Request) => {
       verification_type: 'blockchain_receipt',
       subject_address: tx.recipient_address,
       network: tx.network,
-      status: nextStatus === 'confirmed' ? 'verified' : 'failed',
+      status: requestedState === 'confirmed' ? 'verified' : 'failed',
       proof_metadata: { tx_hash: txHash, verified_by: 'word_receipt_verifier' },
-      verified_at: nextStatus === 'confirmed' ? nowIso : null,
+      verified_at: requestedState === 'confirmed' ? nowIso : null,
     });
 
     await adminClient.from('notifications').insert({
       user_id: user.id,
       category: 'Payment',
       title:
-        nextStatus === 'confirmed'
+        requestedState === 'confirmed'
           ? `Transaction confirmed on ${tx.network}`
           : `Transaction failed on ${tx.network}`,
       detail: `${tx.amount_numeric} ${tx.token_symbol} to ${tx.recipient_name} (${txHash.slice(0, 12)}...).`,
-      metadata: { transactionId, txHash, status: nextStatus },
+      metadata: { transactionId, txHash, status: requestedState },
     });
 
     await recordAuditLog(adminClient, {
       actorUserId: user.id,
-      action: `transaction.receipt_${nextStatus}`,
+      action: `transaction.receipt_${requestedState}`,
       resourceType: 'transactions',
       resourceId: transactionId,
       metadata: { txHash, network: tx.network },
     });
 
-    return jsonResponse({ transaction: updatedTx, verified: nextStatus === 'confirmed' });
+    return jsonResponse({ transaction: updatedTx, verified: requestedState === 'confirmed' });
   } catch (err) {
     return errorResponse(err);
   }

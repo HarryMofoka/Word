@@ -20,12 +20,13 @@ import {
 } from '../services/walletService';
 import {
   fetchWdkBalances,
+  pollTransactionReceipt,
   switchBrowserNetwork,
   type SupportedNetworkName,
   type WalletBalances,
 } from '../services/wdkWalletService';
 import { updateMyProfile } from '../services/authService';
-import { listTransactions } from '../services/paymentsService';
+import { listTransactions, verifyBlockchainReceipt } from '../services/paymentsService';
 import {
   createDispute,
   listDisputes,
@@ -124,8 +125,37 @@ export const WordApp: React.FC<WordAppProps> = ({
         listDisputes(),
       ]);
 
+      let activeTxRows = txRows;
+
+      // Recheck any pending/processing transactions that already have an on-chain tx_hash
+      const pendingWithHash = txRows.filter(
+        (tx) => (tx.status === 'pending' || tx.status === 'processing') && tx.tx_hash
+      );
+      if (pendingWithHash.length > 0) {
+        const rechecked = await Promise.all(
+          pendingWithHash.map(async (tx) => {
+            try {
+              const outcome = await pollTransactionReceipt(tx.tx_hash!, tx.network, 4000);
+              if (outcome === 'confirmed' || outcome === 'failed') {
+                const res = await verifyBlockchainReceipt({
+                  transactionId: tx.id,
+                  txHash: tx.tx_hash!,
+                  outcome,
+                });
+                return res.transaction;
+              }
+            } catch {
+              // keep existing status on transient RPC failure
+            }
+            return tx;
+          })
+        );
+        const byId = new Map(rechecked.map((t) => [t.id, t]));
+        activeTxRows = txRows.map((tx) => byId.get(tx.id) ?? tx);
+      }
+
       setRecords(
-        txRows.map((tx) => ({
+        activeTxRows.map((tx) => ({
           id: tx.id,
           recipient: tx.recipient_name,
           address: tx.recipient_address,
@@ -140,6 +170,7 @@ export const WordApp: React.FC<WordAppProps> = ({
                 : 'Pending',
           verifiedControl: tx.verified_control,
           timestamp: new Date(tx.created_at).toLocaleString(),
+          txHash: tx.tx_hash ?? undefined,
         }))
       );
 

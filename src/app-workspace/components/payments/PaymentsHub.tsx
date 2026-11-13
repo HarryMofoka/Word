@@ -36,6 +36,7 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
   if (mode === 'scan-pay') {
     return (
       <PaymentPayFlow
+        wallet={wallet}
         initialRequest={previewReq}
         onBack={() => {
           setPreviewReq(null);

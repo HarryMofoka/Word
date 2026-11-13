@@ -1,20 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock,
+  ExternalLink,
   QrCode,
+  RefreshCw,
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
-import type { PaymentRecord, PaymentRequestData } from '../../types';
+import type { PaymentRecord, PaymentRequestData, WalletState } from '../../types';
 import {
   preparePayment,
   verifyBlockchainReceipt,
 } from '../../../services/paymentsService';
+import {
+  executeOnChainPayment,
+  pollTransactionReceipt,
+  quoteTransferCost,
+  type TransferQuote,
+} from '../../../services/wdkWalletService';
+import { getNetworkConfig } from '../../../config/blockchain';
 
 type PayStep =
   | 'scan'
@@ -29,6 +38,7 @@ type PayStep =
   | 'failure';
 
 interface PaymentPayFlowProps {
+  wallet: WalletState;
   initialRequest?: PaymentRequestData | null;
   onBack: () => void;
   onRecordAdded: (rec: PaymentRecord) => void;
@@ -48,6 +58,7 @@ const SAMPLE_REQUEST: PaymentRequestData = {
 };
 
 export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
+  wallet,
   initialRequest,
   onBack,
   onRecordAdded,
@@ -60,13 +71,88 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     'verified' | 'mismatch' | 'unverified'
   >('verified');
   const [approvedChecked, setApprovedChecked] = useState(false);
+  const [quote, setQuote] = useState<TransferQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [signingPhrase, setSigningPhrase] = useState('');
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [preparedTxId, setPreparedTxId] = useState<string | null>(null);
+  const [txError, setTxError] = useState<string | null>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const submittingRef = useRef(false);
 
-  // Persist prepared transaction and verify receipt on Supabase
+  const normalizedNetwork =
+    request.network === 'Testnet (Sepolia)' ? 'Testnet' : request.network;
+  const explorerBaseUrl = getNetworkConfig(normalizedNetwork).explorerUrl;
+
+  const toPaymentRecord = (
+    tx: {
+      id: string;
+      recipient_name: string;
+      recipient_address: string;
+      amount_numeric: number | string;
+      token_symbol: string;
+      purpose: string;
+      network: string;
+      verified_control: boolean;
+      created_at: string;
+      tx_hash?: string | null;
+    },
+    status: PaymentRecord['status']
+  ): PaymentRecord => ({
+    id: tx.id,
+    recipient: tx.recipient_name,
+    address: `${tx.recipient_address.slice(0, 6)}...${tx.recipient_address.slice(-4)}`,
+    amount: `${tx.amount_numeric} ${tx.token_symbol}`,
+    purpose: tx.purpose,
+    network: tx.network,
+    status,
+    verifiedControl: tx.verified_control,
+    timestamp: new Date(tx.created_at).toLocaleString(),
+    txHash: tx.tx_hash ?? undefined,
+  });
+
+  // Fetch live sender balance and gas fee estimate when entering review step
   useEffect(() => {
-    if (step !== 'processing') return;
+    if (step !== 'review') return;
+    let active = true;
+    setQuoteLoading(true);
+    setQuoteError(null);
+
+    quoteTransferCost({
+      senderAddress: wallet.address,
+      recipientAddress: request.recipientAddress,
+      amount: request.amount,
+      tokenSymbol: request.token,
+      network: normalizedNetwork,
+    })
+      .then((res) => {
+        if (!active) return;
+        setQuote(res);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setQuoteError(err instanceof Error ? err.message : 'Failed to fetch live fee quote.');
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [step, wallet.address, request.recipientAddress, request.amount, request.token, normalizedNetwork]);
+
+  // Prepare, sign, broadcast, store txHash, and poll receipt on-chain
+  useEffect(() => {
+    if (step !== 'processing' || submittingRef.current) return;
+    submittingRef.current = true;
     let active = true;
 
-    const executeBackendPayment = async () => {
+    const executeRealPayment = async () => {
+      setTxError(null);
+      setTxHash(null);
+
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           request.id
@@ -74,60 +160,103 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
         const prepared = await preparePayment({
           amount: request.amount,
           tokenSymbol: request.token,
-          network: request.network === 'Testnet (Sepolia)' ? 'Testnet' : request.network,
+          network: normalizedNetwork,
           recipientName: request.recipientName,
           recipientAddress: request.recipientAddress,
           purpose: request.description,
+          senderAddress: wallet.address,
           paymentRequestId: isUuid ? request.id : undefined,
         });
+        if (!active) return;
+        setPreparedTxId(prepared.id);
 
-        const txHash = `0x${crypto.randomUUID().replace(/-/g, '')}`;
+        const phraseToUse = signingPhrase;
+        setSigningPhrase('');
+
+        const { txHash: hash } = await executeOnChainPayment({
+          senderAddress: wallet.address,
+          recipientAddress: request.recipientAddress,
+          amount: request.amount,
+          tokenSymbol: request.token,
+          network: normalizedNetwork,
+          walletMethod: wallet.method,
+          signingPhrase: phraseToUse,
+        });
+        if (!active) return;
+        setTxHash(hash);
+
+        await verifyBlockchainReceipt({
+          transactionId: prepared.id,
+          txHash: hash,
+          awaitingConfirmation: true,
+        });
+
+        const outcome = await pollTransactionReceipt(hash, normalizedNetwork, 20000);
+        if (!active) return;
+
+        if (outcome === 'pending') {
+          onRecordAdded(toPaymentRecord(prepared, 'Pending'));
+          setStep('pending');
+          return;
+        }
+
         const { transaction } = await verifyBlockchainReceipt({
           transactionId: prepared.id,
-          txHash,
+          txHash: hash,
+          outcome,
         });
+        if (!active) return;
 
+        if (outcome === 'confirmed') {
+          onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
+          setStep('success');
+        } else {
+          onRecordAdded(toPaymentRecord(transaction, 'Failed'));
+          setTxError('Transaction reverted on-chain.');
+          setStep('failure');
+        }
+      } catch (err) {
         if (!active) return;
-        onRecordAdded({
-          id: transaction.id,
-          recipient: transaction.recipient_name,
-          address: `${transaction.recipient_address.slice(0, 6)}...${transaction.recipient_address.slice(-4)}`,
-          amount: `${transaction.amount_numeric} ${transaction.token_symbol}`,
-          purpose: transaction.purpose,
-          network: transaction.network,
-          status: 'Confirmed',
-          verifiedControl: transaction.verified_control,
-          timestamp: new Date(transaction.created_at).toLocaleString(),
-        });
-        setStep('success');
-      } catch {
-        if (!active) return;
+        setSigningPhrase('');
+        setTxError(
+          err instanceof Error ? err.message : 'Transaction could not be completed.'
+        );
         setStep('failure');
+      } finally {
+        submittingRef.current = false;
       }
     };
 
-    const timer = setTimeout(executeBackendPayment, 600);
+    executeRealPayment();
     return () => {
       active = false;
-      clearTimeout(timer);
     };
-  }, [step, request, verificationState, onRecordAdded]);
+  }, [step]);
 
-  const finishWithStatus = (outcome: 'success' | 'pending' | 'failure') => {
-    if (outcome === 'success' || outcome === 'pending') {
-      onRecordAdded({
-        id: `rec-${Date.now()}`,
-        recipient: request.recipientName,
-        address: `${request.recipientAddress.slice(0, 6)}...${request.recipientAddress.slice(-4)}`,
-        amount: `${request.amount} ${request.token}`,
-        purpose: request.description,
-        network: request.network,
-        status: outcome === 'success' ? 'Confirmed' : 'Pending',
-        verifiedControl: verificationState === 'verified',
-        timestamp: 'Just now',
+  const handleRecheckPending = async () => {
+    if (!txHash || !preparedTxId || rechecking) return;
+    setRechecking(true);
+    try {
+      const outcome = await pollTransactionReceipt(txHash, normalizedNetwork, 12000);
+      if (outcome === 'pending') return;
+      const { transaction } = await verifyBlockchainReceipt({
+        transactionId: preparedTxId,
+        txHash,
+        outcome,
       });
+      if (outcome === 'confirmed') {
+        onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
+        setStep('success');
+      } else {
+        onRecordAdded(toPaymentRecord(transaction, 'Failed'));
+        setTxError('Transaction reverted on-chain.');
+        setStep('failure');
+      }
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to recheck transaction status.');
+    } finally {
+      setRechecking(false);
     }
-    setStep(outcome);
   };
 
   // 1. SCAN QR CODE
@@ -446,11 +575,29 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           </div>
           <div className="record-row">
             <span className="record-key">Network</span>
-            <span className="record-val">{request.network}</span>
+            <span className="record-val">{normalizedNetwork}</span>
           </div>
           <div className="record-row">
-            <span className="record-key">Estimated fee</span>
-            <span className="record-val">~0.001 Testnet ETH (UI)</span>
+            <span className="record-key">Your {request.token} balance</span>
+            <span className="record-val">
+              {quoteLoading
+                ? 'Checking...'
+                : quote
+                  ? `${quote.senderTokenBalance} ${request.token} (${quote.senderNativeBalance} ${quote.nativeSymbol} gas)`
+                  : '—'}
+            </span>
+          </div>
+          <div className="record-row">
+            <span className="record-key">Estimated gas fee</span>
+            <span className="record-val">
+              {quoteLoading ? 'Estimating...' : quote?.estimatedFeeNative ?? '—'}
+            </span>
+          </div>
+          <div className="record-row">
+            <span className="record-key">Total payment cost</span>
+            <span className="record-val">
+              {quoteLoading ? 'Calculating...' : quote?.totalCostDisplay ?? `${request.amount} ${request.token}`}
+            </span>
           </div>
           <div className="record-row">
             <span className="record-key">Purpose</span>
@@ -458,11 +605,31 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           </div>
         </div>
 
+        {(quoteError || (quote && !quote.hasSufficientBalance)) && (
+          <div
+            className="ws-notice"
+            style={{
+              marginBottom: '18px',
+              borderColor: '#fecdca',
+              backgroundColor: '#fef3f2',
+              color: '#b42318',
+            }}
+          >
+            <strong>Cannot proceed:</strong> {quoteError || quote?.insufficientReason}
+          </div>
+        )}
+
         <div className="ws-actions-row">
           <button type="button" className="auth-back-link" onClick={() => setStep('risk')}>
             <ArrowLeft size={15} /> Back
           </button>
-          <Button onClick={() => setStep('approve')}>
+          <Button
+            disabled={quoteLoading || Boolean(quoteError) || (quote ? !quote.hasSufficientBalance : false)}
+            onClick={() => {
+              setApprovedChecked(false);
+              setStep('approve');
+            }}
+          >
             Proceed to approval <ArrowRight size={14} />
           </Button>
         </div>
@@ -496,7 +663,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
             border: '1px solid var(--line)',
             fontSize: '14px',
             cursor: 'pointer',
-            marginBottom: '22px',
+            marginBottom: '18px',
           }}
         >
           <input
@@ -507,20 +674,50 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           />
           <span>
             I have verified the recipient ({request.recipientName}), amount ({request.amount}{' '}
-            {request.token}), and network ({request.network}).
+            {request.token}), gas fee ({quote?.estimatedFeeNative ?? 'estimated'}), and network ({normalizedNetwork}).
           </span>
         </label>
+
+        {wallet.method !== 'connected' ? (
+          <div style={{ marginBottom: '22px' }}>
+            <label className="ws-label" htmlFor="signing-phrase-input">
+              Enter your 12 or 24-word recovery phrase to sign locally
+            </label>
+            <input
+              id="signing-phrase-input"
+              type="password"
+              className="ws-input"
+              placeholder="Words separated by spaces (used in-memory only, never stored or sent)"
+              value={signingPhrase}
+              onChange={(e) => setSigningPhrase(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        ) : (
+          <div className="ws-notice" style={{ marginBottom: '22px' }}>
+            Your connected browser wallet will prompt you to sign this {normalizedNetwork} transaction.
+          </div>
+        )}
 
         <div className="ws-actions-row">
           <button type="button" className="auth-back-link" onClick={() => setStep('review')}>
             <ArrowLeft size={15} /> Back to review
           </button>
           <Button
-            disabled={!approvedChecked}
-            style={!approvedChecked ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            disabled={
+              !approvedChecked ||
+              submittingRef.current ||
+              (wallet.method !== 'connected' && signingPhrase.trim().split(/\s+/).length < 12)
+            }
+            style={
+              !approvedChecked ||
+              (wallet.method !== 'connected' && signingPhrase.trim().split(/\s+/).length < 12)
+                ? { opacity: 0.5, cursor: 'not-allowed' }
+                : undefined
+            }
             onClick={() => setStep('processing')}
           >
-            Approve &amp; submit (UI) <ArrowRight size={14} />
+            Approve &amp; sign transaction <ArrowRight size={14} />
           </Button>
         </div>
       </div>
@@ -536,44 +733,13 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           TRANSACTION PROCESSING
         </p>
         <h1 className="heading-lg" style={{ marginBottom: '12px' }}>
-          Submitting payment...
+          {txHash ? 'Waiting for on-chain confirmation...' : 'Signing & broadcasting payment...'}
         </h1>
-        <p className="body-md" style={{ marginBottom: '24px' }}>
-          Broadcasting {request.amount} {request.token} to {request.network} (UI simulation).
+        <p className="body-md" style={{ marginBottom: '18px' }}>
+          {txHash
+            ? `Transaction ${txHash.slice(0, 10)}...${txHash.slice(-6)} has been submitted to ${normalizedNetwork}.`
+            : `Preparing and signing ${request.amount} ${request.token} on ${normalizedNetwork}.`}
         </p>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '10px',
-            flexWrap: 'wrap',
-            paddingTop: '18px',
-            borderTop: '1px solid var(--line)',
-          }}
-        >
-          <button
-            type="button"
-            className="ws-ghost-btn"
-            onClick={() => finishWithStatus('success')}
-          >
-            Preview Success
-          </button>
-          <button
-            type="button"
-            className="ws-ghost-btn"
-            onClick={() => finishWithStatus('pending')}
-          >
-            Preview Pending
-          </button>
-          <button
-            type="button"
-            className="ws-ghost-btn"
-            onClick={() => finishWithStatus('failure')}
-          >
-            Preview Failure
-          </button>
-        </div>
       </div>
     );
   }
@@ -592,18 +758,27 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           {request.amount} {request.token} confirmed.
         </h1>
         <p className="body-md" style={{ marginBottom: '22px' }}>
-          Your payment record for {request.recipientName} ({request.description}) has been saved to
-          your workspace history.
+          Your on-chain settlement to {request.recipientName} ({request.description}) has been
+          verified and saved to your workspace history.
         </p>
 
-        <div className="ws-notice" style={{ marginBottom: '22px' }}>
-          <strong>Simulated Tx Hash:</strong> 0x9f2a...84c1 · {request.network}
-        </div>
+        {txHash && (
+          <div className="ws-notice" style={{ marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span>
+              <strong>Tx Hash:</strong> {txHash.slice(0, 10)}...{txHash.slice(-8)} · {normalizedNetwork}
+            </span>
+            <a
+              href={`${explorerBaseUrl}/tx/${txHash}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
+            >
+              View on Explorer <ExternalLink size={13} />
+            </a>
+          </div>
+        )}
 
         <div className="ws-actions-row">
-          <button type="button" className="ws-ghost-btn" onClick={() => setStep('pending')}>
-            View Pending state
-          </button>
           <Button onClick={onDoneToDashboard}>
             Return to Dashboard <ArrowRight size={14} />
           </Button>
@@ -625,14 +800,35 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
         <h1 className="heading-lg" style={{ marginBottom: '10px' }}>
           Awaiting network confirmation.
         </h1>
-        <p className="body-md" style={{ marginBottom: '22px' }}>
-          Your transaction has been submitted to {request.network}, but is not yet confirmed. Word
-          clearly distinguishes pending submissions from settled payments.
+        <p className="body-md" style={{ marginBottom: '18px' }}>
+          Your transaction has been broadcast to {normalizedNetwork}, but has not yet been mined.
+          Word clearly distinguishes pending submissions from settled payments.
         </p>
 
+        {txHash && (
+          <div className="ws-notice" style={{ marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span>
+              <strong>Tx Hash:</strong> {txHash.slice(0, 10)}...{txHash.slice(-8)}
+            </span>
+            <a
+              href={`${explorerBaseUrl}/tx/${txHash}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
+            >
+              View on Explorer <ExternalLink size={13} />
+            </a>
+          </div>
+        )}
+
         <div className="ws-actions-row">
-          <button type="button" className="ws-ghost-btn" onClick={() => setStep('failure')}>
-            View Failure state
+          <button
+            type="button"
+            className="ws-ghost-btn"
+            disabled={rechecking}
+            onClick={handleRecheckPending}
+          >
+            <RefreshCw size={14} /> {rechecking ? 'Checking...' : 'Recheck confirmation'}
           </button>
           <Button onClick={onDoneToDashboard}>
             Return to Dashboard <ArrowRight size={14} />
@@ -659,8 +855,8 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
         Transaction could not be completed.
       </h1>
       <p className="body-md" style={{ marginBottom: '22px' }}>
-        No funds were transferred. Review your network selection, gas balance, and recipient details
-        before retrying.
+        {txError ||
+          'No funds were transferred. Review your network selection, gas balance, and recipient details before retrying.'}
       </p>
 
       <div className="ws-actions-row">
