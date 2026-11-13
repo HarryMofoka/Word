@@ -9,11 +9,19 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
+import type { PaymentRequestData } from '../../types';
 import {
   listAssistantMessages,
   listAssistantSessions,
   sendAssistantMessage,
 } from '../../../services/assistantService';
+import {
+  QVAC_DATA_BOUNDARY_SPEC,
+  checkOnDeviceAiCompatibility,
+  interpretPaymentRequestLocally,
+  prepareAssistantPaymentHandoff,
+  type LocalPaymentInterpretation,
+} from '../../../services/qvacAssistantService';
 
 type AdvancedSubView =
   | 'chat'
@@ -120,13 +128,21 @@ const RISK_FACTORS = [
   },
 ];
 
-export const AssistantRiskHub: React.FC = () => {
+interface AssistantRiskHubProps {
+  onHandoffPayment?: (request: PaymentRequestData) => void;
+}
+
+export const AssistantRiskHub: React.FC<AssistantRiskHubProps> = ({ onHandoffPayment }) => {
   const [subView, setSubView] = useState<AdvancedSubView>('chat');
   const [threads, setThreads] = useState<ConversationThread[]>(INITIAL_THREADS);
   const [activeThreadId, setActiveThreadId] = useState<string>(INITIAL_THREADS[0].id);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+  const [onDeviceMode, setOnDeviceMode] = useState(true);
+  const [lastLocalInterpretation, setLastLocalInterpretation] =
+    useState<LocalPaymentInterpretation | null>(null);
+  const deviceCompatibility = checkOnDeviceAiCompatibility();
 
   useEffect(() => {
     let active = true;
@@ -169,6 +185,36 @@ export const AssistantRiskHub: React.FC = () => {
 
     setSending(true);
     setInput('');
+
+    if (onDeviceMode) {
+      const interpreted = interpretPaymentRequestLocally(trimmed, undefined, lastLocalInterpretation);
+      setLastLocalInterpretation(interpreted);
+      const userMsg: ChatMessage = {
+        id: `u-local-${Date.now()}`,
+        sender: 'user',
+        text: trimmed,
+      };
+      const assistantMsg: ChatMessage = {
+        id: `a-local-${Date.now()}`,
+        sender: 'assistant',
+        text: `${interpreted.intentSummary} ${interpreted.approvalPrompt} Risk check: ${interpreted.riskExplanation.classificationLabel} (${interpreted.riskExplanation.riskScore}/100). [Processed locally via ${interpreted.runtimeUsed} in ${interpreted.metrics.inferenceLatencyMs}ms; 0 bytes sent off-device]`,
+      };
+      setThreads((prev) =>
+        prev.map((th) =>
+          th.id === activeThread.id
+            ? {
+                ...th,
+                date: 'Just now',
+                preview: interpreted.intentSummary,
+                messages: [...th.messages, userMsg, assistantMsg],
+              }
+            : th
+        )
+      );
+      setSending(false);
+      return;
+    }
+
     const isPersistedUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       activeThread.id
     );
@@ -272,7 +318,103 @@ export const AssistantRiskHub: React.FC = () => {
                 Word Assistant
               </span>
             </div>
-            <span className="ws-badge">Advisory UI</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                onClick={() => setOnDeviceMode((v) => !v)}
+              >
+                {onDeviceMode ? 'On-device AI: ON' : 'On-device AI: OFF'}
+              </button>
+              <span className="ws-badge">
+                {onDeviceMode ? deviceCompatibility.runtime : 'Advisory UI'}
+              </span>
+            </div>
+          </div>
+
+          <div
+            className="ws-notice"
+            style={{ marginBottom: '16px', fontSize: '12.5px' }}
+          >
+            <div>
+              <strong>QVAC / Local AI Status:</strong> {deviceCompatibility.recommendedModel.label} ({deviceCompatibility.status})
+            </div>
+            <div style={{ marginTop: '4px', opacity: 0.9 }}>
+              {deviceCompatibility.reason}
+            </div>
+            <div style={{ marginTop: '4px', opacity: 0.85 }}>
+              <strong>Data boundary:</strong> {QVAC_DATA_BOUNDARY_SPEC.staysOnDevice[0]}; {QVAC_DATA_BOUNDARY_SPEC.staysOnDevice[1]} stay strictly on-device.
+            </div>
+            {lastLocalInterpretation && (
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                <div>
+                  <strong>Payment intent summary:</strong> {lastLocalInterpretation.intentSummary}
+                </div>
+                <div style={{ marginTop: '4px' }}>
+                  <strong>Risk explanation:</strong>{' '}
+                  {lastLocalInterpretation.riskExplanation.classificationLabel} (
+                  {lastLocalInterpretation.riskExplanation.riskScore}/100) —{' '}
+                  {lastLocalInterpretation.riskExplanation.classificationMeaning}
+                </div>
+                <div style={{ marginTop: '4px' }}>
+                  <strong>Confidence:</strong> {lastLocalInterpretation.confidence} (
+                  {lastLocalInterpretation.metrics.inferenceLatencyMs}ms)
+                </div>
+                {lastLocalInterpretation.uncertaintyReason && (
+                  <div style={{ marginTop: '4px', opacity: 0.9 }}>
+                    <strong>Model uncertainty:</strong> {lastLocalInterpretation.uncertaintyReason}
+                  </div>
+                )}
+                {lastLocalInterpretation.securityWarnings.length > 0 && (
+                  <div style={{ marginTop: '4px', color: '#b42318' }}>
+                    <strong>Security guard:</strong> {lastLocalInterpretation.securityWarnings.join(' ')}
+                  </div>
+                )}
+                {lastLocalInterpretation.clarifyingQuestions.length > 0 && (
+                  <div style={{ marginTop: '4px' }}>
+                    <strong>Clarifying questions:</strong> {lastLocalInterpretation.clarifyingQuestions.join(' ')}
+                  </div>
+                )}
+                {lastLocalInterpretation.proposalValidation.errors.length > 0 && lastLocalInterpretation.proposal && (
+                  <div style={{ marginTop: '4px', color: '#b42318' }}>
+                    <strong>Validation error:</strong> {lastLocalInterpretation.proposalValidation.errors.join(' ')}
+                  </div>
+                )}
+                <div style={{ marginTop: '6px' }}>
+                  <strong>What the assistant did:</strong>{' '}
+                  {lastLocalInterpretation.actionConfirmation.did.join(' · ')}
+                </div>
+                <div style={{ marginTop: '2px' }}>
+                  <strong>What the assistant did NOT do:</strong>{' '}
+                  {lastLocalInterpretation.actionConfirmation.didNot.join(' · ')}
+                </div>
+                {lastLocalInterpretation.proposal &&
+                  lastLocalInterpretation.proposalValidation.valid &&
+                  onHandoffPayment && (
+                    <div style={{ marginTop: '10px' }}>
+                      <Button
+                        compact
+                        onClick={() => {
+                          const handoff = prepareAssistantPaymentHandoff(lastLocalInterpretation);
+                          onHandoffPayment({
+                            id: handoff.id,
+                            amount: handoff.amount,
+                            token: handoff.token,
+                            network: handoff.network,
+                            recipientName: handoff.recipientName,
+                            recipientAddress: handoff.recipientAddress,
+                            description: handoff.description,
+                            shareUrl: `${window.location.origin}/app?draft=${handoff.id}`,
+                            status: 'open',
+                          });
+                        }}
+                      >
+                        Hand off for approval <ArrowRight size={14} />
+                      </Button>
+                    </div>
+                  )}
+              </div>
+            )}
           </div>
 
           <div

@@ -35,6 +35,7 @@ function toRequestData(row: PaymentRequestRow): PaymentRequestData {
 interface PaymentsHubProps {
   wallet: WalletState;
   initialMode?: PaymentFlowMode;
+  initialRequest?: PaymentRequestData | null;
   onRecordAdded: (rec: PaymentRecord) => void;
   onDoneToDashboard: () => void;
 }
@@ -42,11 +43,12 @@ interface PaymentsHubProps {
 export const PaymentsHub: React.FC<PaymentsHubProps> = ({
   wallet,
   initialMode = 'hub',
+  initialRequest = null,
   onRecordAdded,
   onDoneToDashboard,
 }) => {
   const [mode, setMode] = useState<PaymentFlowMode>(initialMode);
-  const [previewReq, setPreviewReq] = useState<PaymentRequestData | null>(null);
+  const [previewReq, setPreviewReq] = useState<PaymentRequestData | null>(initialRequest);
   const [requests, setRequests] = useState<PaymentRequestRow[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);

@@ -87,6 +87,7 @@ export const WordApp: React.FC<WordAppProps> = ({
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
   const [paymentInitialMode, setPaymentInitialMode] = useState<PaymentFlowMode>('hub');
+  const [assistantHandoffRequest, setAssistantHandoffRequest] = useState<import('./types').PaymentRequestData | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [records, setRecords] = useState<PaymentRecord[]>([]);
@@ -511,11 +512,15 @@ export const WordApp: React.FC<WordAppProps> = ({
 
                 {activeTab === 'payments' && (
                   <PaymentsHub
-                    key={paymentInitialMode}
+                    key={`${paymentInitialMode}-${assistantHandoffRequest?.id ?? 'none'}`}
                     wallet={wallet}
                     initialMode={paymentInitialMode}
+                    initialRequest={assistantHandoffRequest}
                     onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
-                    onDoneToDashboard={() => setActiveTab('dashboard')}
+                    onDoneToDashboard={() => {
+                      setAssistantHandoffRequest(null);
+                      setActiveTab('dashboard');
+                    }}
                   />
                 )}
 
@@ -529,7 +534,15 @@ export const WordApp: React.FC<WordAppProps> = ({
                   />
                 )}
 
-                {activeTab === 'assistant' && <AssistantRiskHub />}
+                {activeTab === 'assistant' && (
+                  <AssistantRiskHub
+                    onHandoffPayment={(req) => {
+                      setAssistantHandoffRequest(req);
+                      setPaymentInitialMode('scan-pay');
+                      setActiveTab('payments');
+                    }}
+                  />
+                )}
 
                 {activeTab === 'wallet' && (
                   <WalletOverviewView
