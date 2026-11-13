@@ -64,7 +64,20 @@ Deno.serve(async (req: Request) => {
         if (error) throw new AppError(500, 'FETCH_FAILED', error.message);
         if (!data) throw new AppError(404, 'NOT_FOUND', 'Payment request not found.');
         const checked = await expireIfPastDue(adminClient, data);
-        return jsonResponse({ request: checked });
+        const { data: existingTx } = await adminClient
+          .from('transactions')
+          .select('id, status, tx_hash')
+          .eq('payment_request_id', checked.id)
+          .in('status', ['pending', 'processing', 'confirmed'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return jsonResponse({
+          request: checked,
+          alreadyPaid: Boolean(existingTx) || checked.status === 'completed',
+          existingTransactionStatus: existingTx?.status ?? null,
+          existingTxHash: existingTx?.tx_hash ?? null,
+        });
       }
 
       if (id) {
@@ -76,7 +89,20 @@ Deno.serve(async (req: Request) => {
         if (error) throw new AppError(500, 'FETCH_FAILED', error.message);
         if (!data) throw new AppError(404, 'NOT_FOUND', 'Payment request not found.');
         const checked = await expireIfPastDue(adminClient, data);
-        return jsonResponse({ request: checked });
+        const { data: existingTx } = await adminClient
+          .from('transactions')
+          .select('id, status, tx_hash')
+          .eq('payment_request_id', checked.id)
+          .in('status', ['pending', 'processing', 'confirmed'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return jsonResponse({
+          request: checked,
+          alreadyPaid: Boolean(existingTx) || checked.status === 'completed',
+          existingTransactionStatus: existingTx?.status ?? null,
+          existingTxHash: existingTx?.tx_hash ?? null,
+        });
       }
 
       const { data, error } = await userClient

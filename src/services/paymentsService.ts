@@ -41,12 +41,28 @@ export async function listPaymentRequests(): Promise<PaymentRequestRow[]> {
   return res.requests;
 }
 
-export async function fetchPaymentRequestByCode(shareCode: string): Promise<PaymentRequestRow> {
-  const res = await callEdgeFunction<{ request: PaymentRequestRow }>('payment-requests', {
+export type PaymentRequestLookup = PaymentRequestRow & {
+  alreadyPaid?: boolean;
+  existingTransactionStatus?: string | null;
+  existingTxHash?: string | null;
+};
+
+export async function fetchPaymentRequestByCode(shareCode: string): Promise<PaymentRequestLookup> {
+  const res = await callEdgeFunction<{
+    request: PaymentRequestRow;
+    alreadyPaid?: boolean;
+    existingTransactionStatus?: string | null;
+    existingTxHash?: string | null;
+  }>('payment-requests', {
     method: 'GET',
     query: { shareCode },
   });
-  return res.request;
+  return {
+    ...res.request,
+    alreadyPaid: res.alreadyPaid,
+    existingTransactionStatus: res.existingTransactionStatus ?? null,
+    existingTxHash: res.existingTxHash ?? null,
+  };
 }
 
 export async function runRiskAssessment(params: {
@@ -55,12 +71,31 @@ export async function runRiskAssessment(params: {
   tokenSymbol: string;
   amount: string;
   paymentRequestId?: string;
+  purpose?: string;
+  walletNetwork?: string;
+  tokenContractAddress?: string;
 }): Promise<RiskAssessmentRow> {
   const res = await callEdgeFunction<{ assessment: RiskAssessmentRow }>('risk-assessment', {
     method: 'POST',
     body: params,
   });
   return res.assessment;
+}
+
+export async function listRiskAssessments(paymentRequestId?: string): Promise<RiskAssessmentRow[]> {
+  let query = supabase
+    .from('risk_assessments')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (paymentRequestId) {
+    query = query.eq('payment_request_id', paymentRequestId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function preparePayment(params: {

@@ -48,6 +48,9 @@ export interface PaymentRequestData {
   shareUrl: string;
   expiresAt?: string | null;
   status?: 'open' | 'completed' | 'cancelled' | 'expired';
+  alreadyPaid?: boolean;
+  existingTransactionStatus?: string | null;
+  authoritativeDestinationAddress?: string;
 }
 
 export type QuickActionMode = 'send' | 'request' | 'verify' | null;
