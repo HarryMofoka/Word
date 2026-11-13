@@ -9,6 +9,7 @@ import { DisputeFlowView } from './DisputeFlowView';
 interface AccountabilityHubProps {
   records: PaymentRecord[];
   disputes: Record<string, DisputeCase>;
+  initialSelectedId?: string | null;
   onSaveDispute: (dispute: DisputeCase) => void;
 }
 
@@ -17,10 +18,15 @@ type AccountabilityScreen = 'history' | 'detail' | 'agreement' | 'shared' | 'dis
 export const AccountabilityHub: React.FC<AccountabilityHubProps> = ({
   records,
   disputes,
+  initialSelectedId,
   onSaveDispute,
 }) => {
-  const [screen, setScreen] = useState<AccountabilityScreen>('history');
-  const [selectedId, setSelectedId] = useState<string>(records[0]?.id ?? '');
+  const [screen, setScreen] = useState<AccountabilityScreen>(
+    initialSelectedId ? 'detail' : 'history'
+  );
+  const [selectedId, setSelectedId] = useState<string>(
+    initialSelectedId || records[0]?.id || ''
+  );
   const [filter, setFilter] = useState<'all' | 'Confirmed' | 'Pending' | 'disputed'>('all');
 
   const selectedRecord = records.find((r) => r.id === selectedId) || records[0];

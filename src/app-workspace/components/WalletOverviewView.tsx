@@ -7,6 +7,7 @@ interface WalletOverviewViewProps {
   balanceHidden: boolean;
   onToggleBalance: () => void;
   records: PaymentRecord[];
+  onSelectRecord: (recordId: string) => void;
   onOpenSecurity: () => void;
 }
 
@@ -15,6 +16,7 @@ export const WalletOverviewView: React.FC<WalletOverviewViewProps> = ({
   balanceHidden,
   onToggleBalance,
   records,
+  onSelectRecord,
   onOpenSecurity,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -139,7 +141,20 @@ export const WalletOverviewView: React.FC<WalletOverviewViewProps> = ({
         </div>
 
         {records.map((rec) => (
-          <div key={rec.id} className="ws-record-item">
+          <button
+            key={rec.id}
+            type="button"
+            className="ws-record-item"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              borderLeft: 'none',
+              borderRight: 'none',
+              borderTop: 'none',
+              textAlign: 'left',
+            }}
+            onClick={() => onSelectRecord(rec.id)}
+          >
             <div>
               <p style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--ink)' }}>
                 {rec.recipient} · {rec.amount}
@@ -166,7 +181,7 @@ export const WalletOverviewView: React.FC<WalletOverviewViewProps> = ({
                 {rec.timestamp}
               </p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

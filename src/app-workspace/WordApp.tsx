@@ -7,6 +7,7 @@ import type {
   AppNotification,
   DisputeCase,
   OnboardingStep,
+  PaymentFlowMode,
   PaymentRecord,
   UserSession,
   WalletState,
@@ -116,6 +117,8 @@ export const WordApp: React.FC<WordAppProps> = ({
     useState<OnboardingStep>('workspace');
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
+  const [paymentInitialMode, setPaymentInitialMode] = useState<PaymentFlowMode>('hub');
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [records, setRecords] = useState<PaymentRecord[]>(INITIAL_RECORDS);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
@@ -315,7 +318,7 @@ export const WordApp: React.FC<WordAppProps> = ({
             </div>
           ) : (
             wallet && (
-              <>
+              <div key={activeTab} className="ws-view-enter">
                 {activeTab === 'dashboard' && (
                   <DashboardView
                     session={session}
@@ -324,8 +327,19 @@ export const WordApp: React.FC<WordAppProps> = ({
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}
                     notifications={notifications}
-                    onCreateDemoRecord={(rec) => setRecords((prev) => [rec, ...prev])}
-                    onNavigateTab={setActiveTab}
+                    onNavigateTab={(tab) => {
+                      if (tab === 'payments') setPaymentInitialMode('hub');
+                      if (tab === 'records') setSelectedRecordId(null);
+                      setActiveTab(tab);
+                    }}
+                    onOpenPaymentMode={(mode) => {
+                      setPaymentInitialMode(mode);
+                      setActiveTab('payments');
+                    }}
+                    onSelectRecord={(recordId) => {
+                      setSelectedRecordId(recordId);
+                      setActiveTab('records');
+                    }}
                     onOpenSecurity={() => {
                       setPreviousStepBeforeSecurity('workspace');
                       setStep('recovery-info');
@@ -335,7 +349,9 @@ export const WordApp: React.FC<WordAppProps> = ({
 
                 {activeTab === 'payments' && (
                   <PaymentsHub
+                    key={paymentInitialMode}
                     wallet={wallet}
+                    initialMode={paymentInitialMode}
                     onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
                     onDoneToDashboard={() => setActiveTab('dashboard')}
                   />
@@ -343,8 +359,10 @@ export const WordApp: React.FC<WordAppProps> = ({
 
                 {activeTab === 'records' && (
                   <AccountabilityHub
+                    key={selectedRecordId || 'all'}
                     records={records}
                     disputes={disputes}
+                    initialSelectedId={selectedRecordId}
                     onSaveDispute={handleSaveDispute}
                   />
                 )}
@@ -357,6 +375,10 @@ export const WordApp: React.FC<WordAppProps> = ({
                     balanceHidden={balanceHidden}
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}
+                    onSelectRecord={(recordId) => {
+                      setSelectedRecordId(recordId);
+                      setActiveTab('records');
+                    }}
                     onOpenSecurity={() => {
                       setPreviousStepBeforeSecurity('workspace');
                       setStep('recovery-info');
@@ -398,7 +420,7 @@ export const WordApp: React.FC<WordAppProps> = ({
                     onLogout={onLogout}
                   />
                 )}
-              </>
+              </div>
             )
           )}
         </Container>

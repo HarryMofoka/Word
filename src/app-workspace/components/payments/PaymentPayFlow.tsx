@@ -494,7 +494,8 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
   // 7. TRANSACTION PROCESSING SCREEN
   if (step === 'processing') {
     return (
-      <div className="ws-card" style={{ maxWidth: '640px', textAlign: 'center' }}>
+      <div className="ws-card ws-view-enter" style={{ maxWidth: '640px', textAlign: 'center' }}>
+        <div className="ws-processing-dot" aria-hidden="true" />
         <p className="eyebrow" style={{ marginBottom: '12px' }}>
           TRANSACTION PROCESSING
         </p>

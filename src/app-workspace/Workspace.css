@@ -447,6 +447,49 @@
   transform: translateX(20px);
 }
 
+@keyframes wsViewEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes wsPulseSoft {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.ws-view-enter {
+  animation: wsViewEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ws-processing-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background-color: var(--ink);
+  margin: 0 auto 14px;
+  animation: wsPulseSoft 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-view-enter,
+  .ws-processing-dot {
+    animation: none;
+  }
+}
+
 @media (max-width: 960px) {
   .ws-nav-tabs {
     display: none;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -6,14 +6,13 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  QrCode,
+  FileText,
   ShieldCheck,
 } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
 import type {
   AppNotification,
+  PaymentFlowMode,
   PaymentRecord,
-  QuickActionMode,
   UserSession,
   WalletState,
   WorkspaceTab,
@@ -26,8 +25,9 @@ interface DashboardViewProps {
   onToggleBalance: () => void;
   records: PaymentRecord[];
   notifications: AppNotification[];
-  onCreateDemoRecord: (record: PaymentRecord) => void;
   onNavigateTab: (tab: WorkspaceTab) => void;
+  onOpenPaymentMode: (mode: PaymentFlowMode) => void;
+  onSelectRecord: (recordId: string) => void;
   onOpenSecurity: () => void;
 }
 
@@ -38,48 +38,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleBalance,
   records,
   notifications,
-  onCreateDemoRecord,
   onNavigateTab,
+  onOpenPaymentMode,
+  onSelectRecord,
   onOpenSecurity,
 }) => {
-  const [quickMode, setQuickMode] = useState<QuickActionMode>(null);
-  const [recipient, setRecipient] = useState('Thabo M.');
-  const [address, setAddress] = useState('0x4b8f92c10a7d44e19c3f8b2a91e2');
-  const [amount, setAmount] = useState('20.00');
-  const [purpose, setPurpose] = useState('Laptop purchase');
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
-
   const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
   const unreadNotifs = notifications.filter((n) => !n.read);
-
-  const handleQuickSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (quickMode === 'send') {
-      const rec: PaymentRecord = {
-        id: `rec-${Date.now()}`,
-        recipient: recipient || 'Recipient',
-        address: address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address,
-        amount: `${amount || '0.00'} USDT`,
-        purpose: purpose || 'Peer-to-peer payment',
-        network: wallet.network,
-        status: 'Pending',
-        verifiedControl: true,
-        timestamp: 'Just now',
-      };
-      onCreateDemoRecord(rec);
-      setActionNotice(
-        `UI preview: Payment request for ${rec.amount} to ${rec.recipient} added as Pending.`
-      );
-    } else if (quickMode === 'request') {
-      setActionNotice(
-        `UI preview: Structured payment request for ${amount || '20.00'} USDT (${purpose}) prepared.`
-      );
-    } else if (quickMode === 'verify') {
-      setActionNotice(
-        `UI preview: Signature check interface ready for ${address.slice(0, 10)}... (Testnet UI only).`
-      );
-    }
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -111,30 +76,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {balanceHidden ? '•••••• USDT' : '240.00 USDT'}
           </p>
           <p className="body-sm" style={{ marginTop: '8px' }}>
-            {wallet.network} demonstration balance · Welcome back, {session.displayName}
+            {wallet.network} UI preview · Welcome back, {session.displayName}
           </p>
 
-          {/* Quick Actions */}
+          {/* Quick Actions connected to real flows */}
           <div className="ws-quick-actions" aria-label="Quick actions">
             <button
               type="button"
               className="ws-quick-btn"
-              onClick={() => {
-                setQuickMode(quickMode === 'send' ? null : 'send');
-                setActionNotice(null);
-              }}
+              onClick={() => onOpenPaymentMode('scan-pay')}
             >
               <ArrowUpRight size={17} />
-              <span>Send</span>
+              <span>Send / Pay</span>
             </button>
 
             <button
               type="button"
               className="ws-quick-btn"
-              onClick={() => {
-                setQuickMode(quickMode === 'request' ? null : 'request');
-                setActionNotice(null);
-              }}
+              onClick={() => onOpenPaymentMode('create-request')}
             >
               <ArrowDownLeft size={17} />
               <span>Request</span>
@@ -143,22 +102,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               className="ws-quick-btn"
-              onClick={() => {
-                setQuickMode(quickMode === 'verify' ? null : 'verify');
-                setActionNotice(null);
-              }}
+              onClick={() => onNavigateTab('assistant')}
             >
               <ShieldCheck size={17} />
-              <span>Verify</span>
+              <span>Assistant</span>
             </button>
 
             <button
               type="button"
               className="ws-quick-btn"
-              onClick={() => onNavigateTab('wallet')}
+              onClick={() => onNavigateTab('records')}
             >
-              <QrCode size={17} />
-              <span>Wallet</span>
+              <FileText size={17} />
+              <span>Records</span>
             </button>
           </div>
         </div>
@@ -238,129 +194,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Expandable Quick Action Panel (UI Preview) */}
-      {quickMode && (
-        <div className="ws-card">
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '16px',
-            }}
-          >
-            <div>
-              <p className="eyebrow" style={{ marginBottom: '4px' }}>
-                QUICK ACTION · UI PREVIEW
-              </p>
-              <h2 className="heading-md">
-                {quickMode === 'send'
-                  ? 'Send a payment'
-                  : quickMode === 'request'
-                    ? 'Create a payment request'
-                    : 'Verify recipient wallet control'}
-              </h2>
-            </div>
-            <button
-              type="button"
-              className="ws-ghost-btn"
-              onClick={() => setQuickMode(null)}
-            >
-              Close
-            </button>
-          </div>
-
-          <form
-            onSubmit={handleQuickSubmit}
-            style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '560px' }}
-          >
-            {quickMode !== 'verify' && (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: '12px',
-                }}
-              >
-                <div className="field-group">
-                  <label className="field-label" htmlFor="qa-recipient">
-                    {quickMode === 'send' ? 'Recipient' : 'Payer'}
-                  </label>
-                  <input
-                    id="qa-recipient"
-                    type="text"
-                    className="field-input"
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="field-label" htmlFor="qa-amount">
-                    Amount (USDT)
-                  </label>
-                  <input
-                    id="qa-amount"
-                    type="text"
-                    className="field-input"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="field-group">
-              <label className="field-label" htmlFor="qa-address">
-                Wallet address
-              </label>
-              <input
-                id="qa-address"
-                type="text"
-                className="field-input"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-              />
-            </div>
-
-            {quickMode !== 'verify' && (
-              <div className="field-group">
-                <label className="field-label" htmlFor="qa-purpose">
-                  Payment purpose
-                </label>
-                <input
-                  id="qa-purpose"
-                  type="text"
-                  className="field-input"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
-            <div>
-              <Button type="submit" compact>
-                {quickMode === 'send'
-                  ? 'Review & approve (UI)'
-                  : quickMode === 'request'
-                    ? 'Generate request (UI)'
-                    : 'Run check (UI)'}{' '}
-                <ArrowRight size={14} />
-              </Button>
-            </div>
-
-            {actionNotice && (
-              <div className="auth-status-banner" role="status">
-                {actionNotice}
-              </div>
-            )}
-          </form>
-        </div>
-      )}
-
       {/* Bottom Row: Recent Transactions + Notifications Preview */}
       <div className="ws-grid">
         <div className="ws-card">
@@ -377,14 +210,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               type="button"
               className="text-link"
               style={{ background: 'transparent', border: 'none', fontSize: '13px' }}
-              onClick={() => onNavigateTab('wallet')}
+              onClick={() => onNavigateTab('records')}
             >
-              See all
+              View all <ArrowRight size={13} />
             </button>
           </div>
 
           {records.map((rec) => (
-            <div key={rec.id} className="ws-record-item">
+            <button
+              key={rec.id}
+              type="button"
+              className="ws-record-item"
+              style={{
+                width: '100%',
+                background: 'transparent',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+                textAlign: 'left',
+              }}
+              onClick={() => onSelectRecord(rec.id)}
+            >
               <div>
                 <p style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--ink)' }}>
                   {rec.recipient} · {rec.amount}
@@ -411,7 +257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {rec.timestamp}
                 </p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -446,7 +292,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <p className="body-sm">{n.detail}</p>
                 </div>
               </div>
-              <span className="body-sm" style={{ fontSize: '12px', color: 'var(--mute)', flexShrink: 0 }}>
+              <span
+                className="body-sm"
+                style={{ fontSize: '12px', color: 'var(--mute)', flexShrink: 0 }}
+              >
                 {n.time}
               </span>
             </div>
@@ -456,4 +305,3 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
-
