@@ -17,6 +17,43 @@ export async function listPaymentAgreements(): Promise<PaymentAgreementRow[]> {
   return res.agreements;
 }
 
+export async function createPaymentAgreement(params: {
+  paymentRequestId?: string;
+  title: string;
+  purpose: string;
+  amount: string;
+  tokenSymbol: string;
+  network: string;
+  recipientName: string;
+  recipientAddress: string;
+  termsText: string;
+}): Promise<PaymentAgreementRow> {
+  const res = await callEdgeFunction<{ agreement: PaymentAgreementRow }>('payment-agreements', {
+    method: 'POST',
+    body: { action: 'create', ...params },
+  });
+  return res.agreement;
+}
+
+export async function revisePaymentAgreement(params: {
+  agreementId: string;
+  changeNote: string;
+  title?: string;
+  purpose?: string;
+  amount?: string;
+  tokenSymbol?: string;
+  network?: string;
+  recipientName?: string;
+  recipientAddress?: string;
+  termsText?: string;
+}): Promise<PaymentAgreementRow> {
+  const res = await callEdgeFunction<{ agreement: PaymentAgreementRow }>('payment-agreements', {
+    method: 'POST',
+    body: { action: 'revise', ...params },
+  });
+  return res.agreement;
+}
+
 export async function acceptPaymentAgreement(agreementId: string): Promise<PaymentAgreementRow> {
   const res = await callEdgeFunction<{ agreement: PaymentAgreementRow }>('payment-agreements', {
     method: 'POST',

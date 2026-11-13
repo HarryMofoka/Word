@@ -30,6 +30,14 @@ export interface DisputeCase {
   summary: string;
   status: 'Open' | 'Evidence Submitted' | 'Under Review';
   createdAt: string;
+  acknowledgementId?: string;
+  acknowledgedAt?: string;
+  eventHistory?: Array<{
+    id: string;
+    type: string;
+    detail: string;
+    timestamp: string;
+  }>;
   evidence: EvidenceItem[];
 }
 
@@ -76,6 +84,7 @@ export interface WalletState {
 
 export interface PaymentRecord {
   id: string;
+  senderAddress?: string;
   recipient: string;
   address: string;
   amount: string;

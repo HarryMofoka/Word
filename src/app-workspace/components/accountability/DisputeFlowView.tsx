@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, FileText, Plus } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import type { DisputeCase, EvidenceItem, PaymentRecord } from '../../types';
+import {
+  DISPUTE_CATEGORIES,
+  DISPUTE_LIMITATIONS_NOTICE,
+  createDisputeCase,
+  type DisputeCategory,
+} from '../../../services/disputeService';
 
 interface DisputeFlowViewProps {
   record: PaymentRecord;
@@ -11,12 +17,7 @@ interface DisputeFlowViewProps {
   onSaveDispute: (dispute: DisputeCase) => void;
 }
 
-const REASONS = [
-  'Item or service not delivered',
-  'Item did not match agreed description',
-  'Destination or payment request mismatch',
-  'Other agreement concern',
-];
+const REASONS = [...DISPUTE_CATEGORIES];
 
 export const DisputeFlowView: React.FC<DisputeFlowViewProps> = ({
   record,
@@ -39,36 +40,69 @@ export const DisputeFlowView: React.FC<DisputeFlowViewProps> = ({
 
   const handleSubmitReport = (e: React.FormEvent) => {
     e.preventDefault();
-    const created: DisputeCase = existingDispute || {
-      id: `dsp-${Date.now()}`,
+    const nowIso = new Date().toISOString();
+    if (existingDispute) {
+      onSaveDispute({
+        ...existingDispute,
+        reason,
+        summary: summary.trim() || existingDispute.summary,
+      });
+      setSubView('evidence');
+      return;
+    }
+    const managed = createDisputeCase({
+      paymentId: record.id,
+      category: (DISPUTE_CATEGORIES.includes(reason as DisputeCategory)
+        ? reason
+        : DISPUTE_CATEGORIES[0]) as DisputeCategory,
+      explanation: summary.trim() || 'Dispute report opened for review.',
+      nowIso,
+    });
+    const created: DisputeCase = {
+      id: managed.id,
       recordId: record.id,
-      reason,
-      summary: summary.trim() || 'Dispute report opened for review.',
+      reason: managed.category,
+      summary: managed.explanation,
       status: 'Open',
-      createdAt: 'Just now',
+      createdAt: managed.createdAt,
+      acknowledgementId: managed.acknowledgement.referenceId,
+      acknowledgedAt: managed.acknowledgement.acknowledgedAt,
+      eventHistory: managed.eventHistory.map((ev) => ({
+        id: ev.id,
+        type: ev.type,
+        detail: ev.detail,
+        timestamp: ev.timestamp,
+      })),
       evidence: [],
     };
-    onSaveDispute({
-      ...created,
-      reason,
-      summary: summary.trim() || created.summary,
-    });
+    onSaveDispute(created);
     setSubView('evidence');
   };
 
   const handleAddEvidence = (e: React.FormEvent) => {
     e.preventDefault();
     if (!existingDispute) return;
+    const nowIso = new Date().toISOString();
     const item: EvidenceItem = {
       id: `ev-${Date.now()}`,
       label: evidenceLabel.trim() || 'Supporting attachment (UI)',
       note: evidenceNote.trim() || 'Reference uploaded to shared record.',
-      addedAt: 'Just now',
+      addedAt: nowIso,
     };
+    const nextHistory = [
+      ...(existingDispute.eventHistory ?? []),
+      {
+        id: `evt-ev-${item.id}`,
+        type: 'evidence_attached',
+        detail: `${item.label}: ${item.note}`,
+        timestamp: nowIso,
+      },
+    ];
     onSaveDispute({
       ...existingDispute,
       status: 'Evidence Submitted',
       evidence: [item, ...existingDispute.evidence],
+      eventHistory: nextHistory,
     });
     setEvidenceLabel('');
     setEvidenceNote('');
@@ -127,9 +161,7 @@ export const DisputeFlowView: React.FC<DisputeFlowViewProps> = ({
           </p>
 
           <div className="ws-notice" style={{ marginBottom: '20px' }}>
-            <strong>Important:</strong> Dispute reporting organises information and supporting
-            evidence. It does not automatically reverse blockchain payments or guarantee recovery of
-            funds.
+            <strong>Important:</strong> {DISPUTE_LIMITATIONS_NOTICE}
           </div>
 
           <form
@@ -261,9 +293,20 @@ export const DisputeFlowView: React.FC<DisputeFlowViewProps> = ({
           <h1 className="heading-lg" style={{ marginBottom: '10px' }}>
             {existingDispute.reason}
           </h1>
-          <p className="body-md" style={{ marginBottom: '22px' }}>
+          <p className="body-md" style={{ marginBottom: '16px' }}>
             {existingDispute.summary}
           </p>
+
+          {existingDispute.acknowledgementId && (
+            <div className="ws-notice" style={{ marginBottom: '18px' }}>
+              <strong>Dispute acknowledged:</strong> Reference{' '}
+              <code>{existingDispute.acknowledgementId}</code> logged at{' '}
+              {existingDispute.acknowledgedAt
+                ? new Date(existingDispute.acknowledgedAt).toLocaleString()
+                : existingDispute.createdAt}
+              . {DISPUTE_LIMITATIONS_NOTICE}
+            </div>
+          )}
 
           <div
             style={{
