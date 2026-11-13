@@ -90,8 +90,8 @@
 }
 
 .navbar-burger {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--white);
@@ -104,19 +104,19 @@
 .mobile-menu-panel {
   border-top: 1px solid var(--line);
   background-color: var(--bg);
-  padding: 16px var(--container-pad) 24px;
+  padding: 12px var(--container-pad) 24px;
 }
 
 .mobile-menu-links {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 2px;
+  margin-bottom: 18px;
 }
 
 .mobile-menu-link {
-  padding: 10px 4px;
-  font-size: 15px;
+  padding: 13px 4px;
+  font-size: 16px;
   font-weight: 450;
   color: var(--ink);
   border-bottom: 1px solid var(--line);

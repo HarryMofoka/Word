@@ -52,7 +52,8 @@ export const DotMatrixHands: React.FC = () => {
       if (!canvas) return;
       viewW = canvas.parentElement?.clientWidth || window.innerWidth;
       viewH = canvas.parentElement?.clientHeight || 760;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const maxDpr = viewW <= 760 ? 1.5 : 2;
+      dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
       canvas.width = Math.max(1, Math.round(viewW * dpr));
       canvas.height = Math.max(1, Math.round(viewH * dpr));
       canvas.style.width = `${viewW}px`;
@@ -128,10 +129,10 @@ export const DotMatrixHands: React.FC = () => {
       const breathe = 1 + Math.sin(timeSec * 0.55) * 0.025;
       const roll = Math.sin(timeSec * 0.45) * 0.028;
 
-      const handW = isMobile ? cols * 0.56 * breathe : cols * 0.42 * breathe;
+      const handW = isMobile ? cols * 0.62 * breathe : cols * 0.42 * breathe;
       const aspect = leftTile.height / Math.max(1, leftTile.width);
       const handH = handW * aspect;
-      const centerY = isMobile ? rows * 0.68 : rows * 0.54;
+      const centerY = isMobile ? rows * 0.75 : rows * 0.54;
 
       // Left hand (counter-phase)
       fCtx.save();

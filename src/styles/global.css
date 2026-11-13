@@ -20,7 +20,13 @@ body {
   color: var(--ink);
   font-family: var(--font);
   line-height: 1.5;
-  overflow-x: hidden;
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a,
+button {
+  touch-action: manipulation;
 }
 
 a {

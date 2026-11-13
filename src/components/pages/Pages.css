@@ -220,9 +220,31 @@
 @media (max-width: 900px) {
   .auth-frosted-pane {
     width: 100%;
+    padding: 24px 20px 32px;
     border-left: none !important;
     border-right: none !important;
     background-color: rgba(247, 247, 245, 0.86);
+  }
+
+  .auth-form-wrap {
+    margin-block: 28px;
+  }
+
+  .field-input,
+  .field-textarea {
+    font-size: 16px;
+  }
+
+  .frosted-page {
+    padding-block: 28px 48px;
+  }
+
+  .frosted-surface {
+    padding: 24px 18px;
+  }
+
+  .frosted-photo-card img {
+    height: 190px;
   }
 
   .frosted-media-grid,

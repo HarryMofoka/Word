@@ -47,15 +47,7 @@ export const Accountability: React.FC = () => {
               Word helps users maintain a clearer record of what was agreed and what happened.
             </p>
 
-            <ul
-              style={{
-                listStyle: 'none',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '10px 20px',
-                marginBottom: '24px',
-              }}
-            >
+            <ul className="accountability-list">
               {CAPABILITIES.map((cap) => (
                 <li
                   key={cap}

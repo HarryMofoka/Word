@@ -284,6 +284,14 @@
   align-items: start;
 }
 
+.accountability-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 20px;
+  margin-bottom: 24px;
+}
+
 .record-document {
   background-color: var(--white);
   border: 1px solid var(--line);
@@ -413,8 +421,40 @@
     display: none;
   }
 
+  .security-statement-box {
+    padding: 28px 22px;
+  }
+
+  .chat-frame {
+    padding: 18px;
+  }
+
+  .chat-bubble-user,
+  .chat-bubble-assistant {
+    max-width: 94%;
+  }
+
+  .bento-media,
+  .bento-card--wide .bento-media {
+    height: 190px;
+  }
+
+  .bento-body {
+    padding: 20px;
+  }
+
+  .record-document {
+    padding: 22px 18px;
+  }
+
   .sponsors-row {
     gap: 24px;
+  }
+}
+
+@media (max-width: 540px) {
+  .accountability-list {
+    grid-template-columns: 1fr;
   }
 }
 

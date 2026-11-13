@@ -50,14 +50,18 @@
 
 @media (max-width: 760px) {
   .hero {
-    min-height: 680px;
+    min-height: min(680px, calc(100dvh - 68px));
     align-items: flex-start;
-    padding-top: 56px;
-    padding-bottom: 240px;
+    padding-top: 40px;
+    padding-bottom: 210px;
   }
 
   .hero-content {
-    padding-inline: 16px;
+    padding: 16px 8px;
+  }
+
+  .hero-sub {
+    margin-bottom: 26px;
   }
 }
 
