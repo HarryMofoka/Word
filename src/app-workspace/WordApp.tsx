@@ -21,6 +21,7 @@ import { WalletOverviewView } from './components/WalletOverviewView';
 import { NotificationsView } from './components/NotificationsView';
 import { ProfileView } from './components/ProfileView';
 import { SettingsView } from './components/SettingsView';
+import { PaymentsHub } from './components/payments/PaymentsHub';
 import './Workspace.css';
 
 interface WordAppProps {
@@ -86,6 +87,7 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'payments', label: 'Payments' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'profile', label: 'Profile' },
@@ -307,6 +309,14 @@ export const WordApp: React.FC<WordAppProps> = ({
                       setPreviousStepBeforeSecurity('workspace');
                       setStep('recovery-info');
                     }}
+                  />
+                )}
+
+                {activeTab === 'payments' && (
+                  <PaymentsHub
+                    wallet={wallet}
+                    onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
+                    onDoneToDashboard={() => setActiveTab('dashboard')}
                   />
                 )}
 

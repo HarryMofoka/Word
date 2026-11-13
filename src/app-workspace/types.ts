@@ -8,10 +8,25 @@ export type OnboardingStep =
 
 export type WorkspaceTab =
   | 'dashboard'
+  | 'payments'
   | 'wallet'
   | 'notifications'
   | 'profile'
   | 'settings';
+
+export type PaymentFlowMode = 'hub' | 'create-request' | 'scan-pay';
+
+export interface PaymentRequestData {
+  id: string;
+  amount: string;
+  token: string;
+  network: string;
+  recipientName: string;
+  recipientAddress: string;
+  description: string;
+  terms?: string;
+  shareUrl: string;
+}
 
 export type QuickActionMode = 'send' | 'request' | 'verify' | null;
 

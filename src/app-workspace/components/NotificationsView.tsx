@@ -104,3 +104,4 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     </div>
   );
 };
+
