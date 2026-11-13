@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import type { PaymentRequestData, WalletState } from '../../types';
+import { createPaymentRequest } from '../../../services/paymentsService';
+import {
+  NETWORK_CONFIGS,
+  validateTokenCompatibility,
+  validateWalletAddress,
+} from '../../../config/blockchain';
 
 interface PaymentRequestFlowProps {
   wallet: WalletState;
@@ -9,8 +15,8 @@ interface PaymentRequestFlowProps {
   onPreviewAsPayer: (req: PaymentRequestData) => void;
 }
 
-const TOKENS = ['USDT', 'USDC', 'ETH'];
-const NETWORKS = ['Testnet (Sepolia)', 'Testnet (Polygon Amoy)', 'Testnet (Tron Nile)'];
+const TOKENS = ['USDT', 'USDC', 'ETH', 'WETH'];
+const NETWORKS = Object.keys(NETWORK_CONFIGS);
 
 function DeterministicQR({ seed }: { seed: string }) {
   const size = 21;
@@ -90,21 +96,54 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
 
   const [generated, setGenerated] = useState<PaymentRequestData | null>(null);
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = `req-${Math.random().toString(36).slice(2, 8)}`;
-    setGenerated({
-      id,
-      amount: amount.trim() || '20.00',
-      token,
-      network,
-      recipientName: recipientName.trim() || 'Recipient',
-      recipientAddress: recipientAddress.trim() || wallet.address,
-      description: description.trim() || 'Peer-to-peer payment',
-      terms: showTerms && terms.trim() ? terms.trim() : undefined,
-      shareUrl: `https://word.app/pay/${id}`,
-    });
+    setErrorMsg(null);
+
+    const targetAddr = recipientAddress.trim() || wallet.address;
+    const addrCheck = validateWalletAddress(targetAddr, 'Recipient address');
+    if (!addrCheck.valid) {
+      setErrorMsg(addrCheck.reason ?? 'Invalid recipient address.');
+      return;
+    }
+
+    const tokenCheck = validateTokenCompatibility(token, network);
+    if (!tokenCheck.compatible) {
+      setErrorMsg(tokenCheck.reason ?? 'Token is not compatible with selected network.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const saved = await createPaymentRequest({
+        amount: amount.trim() || '20.00',
+        tokenSymbol: token,
+        network,
+        recipientName: recipientName.trim() || 'Recipient',
+        recipientAddress: recipientAddress.trim() || wallet.address,
+        description: description.trim() || 'Peer-to-peer payment',
+        terms: showTerms && terms.trim() ? terms.trim() : undefined,
+      });
+
+      setGenerated({
+        id: saved.id,
+        amount: String(saved.amount_numeric),
+        token: saved.token_symbol,
+        network: saved.network,
+        recipientName: saved.recipient_name,
+        recipientAddress: saved.recipient_address,
+        description: saved.description,
+        terms: saved.terms ?? undefined,
+        shareUrl: `${window.location.origin}/app?pay=${saved.share_code}`,
+      });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to create payment request.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -397,12 +436,18 @@ export const PaymentRequestFlow: React.FC<PaymentRequestFlowProps> = ({
           )}
         </div>
 
+        {errorMsg && (
+          <p role="alert" style={{ color: '#fca5a5', fontSize: '13px' }}>
+            {errorMsg}
+          </p>
+        )}
+
         <div className="ws-actions-row">
           <button type="button" className="auth-back-link" onClick={onBack}>
             Cancel
           </button>
-          <Button type="submit">
-            Generate QR &amp; link <ArrowRight size={14} />
+          <Button type="submit" disabled={creating}>
+            {creating ? 'Creating...' : 'Generate QR & link'} <ArrowRight size={14} />
           </Button>
         </div>
       </form>

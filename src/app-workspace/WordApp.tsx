@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
 import type { AppRoute } from '../types';
 import { Container } from '../components/layout/Container';
@@ -13,6 +13,26 @@ import type {
   WalletState,
   WorkspaceTab,
 } from './types';
+import {
+  registerWalletAndChallenge,
+  updateWalletBackupFlag,
+  verifyWalletChallenge,
+} from '../services/walletService';
+import {
+  fetchWdkBalances,
+  switchBrowserNetwork,
+  type SupportedNetworkName,
+  type WalletBalances,
+} from '../services/wdkWalletService';
+import { updateMyProfile } from '../services/authService';
+import { listTransactions } from '../services/paymentsService';
+import {
+  createDispute,
+  listDisputes,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../services/accountabilityService';
 import { OnboardingWelcome } from './components/OnboardingWelcome';
 import { WalletSetup } from './components/WalletSetup';
 import { WalletImport } from './components/WalletImport';
@@ -36,58 +56,6 @@ interface WordAppProps {
   onLogout: () => void;
   onNavigateMarketing: (route: AppRoute) => void;
 }
-
-const INITIAL_RECORDS: PaymentRecord[] = [
-  {
-    id: 'rec-1',
-    recipient: 'Thabo M.',
-    address: '0x4b8f...91e2',
-    amount: '20.00 USDT',
-    purpose: 'Laptop purchase',
-    network: 'Testnet',
-    status: 'Confirmed',
-    verifiedControl: true,
-    timestamp: 'Today, 09:42',
-  },
-  {
-    id: 'rec-2',
-    recipient: 'Lerato K.',
-    address: '0x9a12...3c40',
-    amount: '45.00 USDT',
-    purpose: 'Design retainer',
-    network: 'Testnet',
-    status: 'Confirmed',
-    verifiedControl: true,
-    timestamp: 'Yesterday',
-  },
-];
-
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'n-1',
-    title: 'Transaction confirmed on Testnet',
-    detail: '20.00 USDT to Thabo M. for Laptop purchase is confirmed.',
-    time: '12m ago',
-    category: 'Payment',
-    read: false,
-  },
-  {
-    id: 'n-2',
-    title: 'Recipient wallet control checked',
-    detail: 'Cryptographic signature verification succeeded for 0x4b8f...91e2.',
-    time: '14m ago',
-    category: 'Verification',
-    read: false,
-  },
-  {
-    id: 'n-3',
-    title: 'Self-custody reminder',
-    detail: 'Always confirm recipient address, network, and fee before signing.',
-    time: 'Yesterday',
-    category: 'Security',
-    read: true,
-  },
-];
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -120,23 +88,144 @@ export const WordApp: React.FC<WordAppProps> = ({
   const [paymentInitialMode, setPaymentInitialMode] = useState<PaymentFlowMode>('hub');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
-  const [records, setRecords] = useState<PaymentRecord[]>(INITIAL_RECORDS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [records, setRecords] = useState<PaymentRecord[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [disputes, setDisputes] = useState<Record<string, DisputeCase>>({});
+  const [syncingData, setSyncingData] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [balances, setBalances] = useState<WalletBalances | null>(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
 
-  const handleSaveDispute = (dispute: DisputeCase) => {
+  const refreshBalances = useCallback(async (targetWallet: WalletState | null) => {
+    if (!targetWallet?.address) return;
+    setBalancesLoading(true);
+    try {
+      const next = await fetchWdkBalances(targetWallet.address, targetWallet.network);
+      setBalances(next);
+    } finally {
+      setBalancesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (wallet?.address) {
+      refreshBalances(wallet);
+    }
+  }, [wallet?.address, wallet?.network, refreshBalances]);
+
+  const refreshWorkspaceData = useCallback(async () => {
+    if (!session.id) return;
+    setSyncingData(true);
+    setSyncError(null);
+    try {
+      const [txRows, notifRows, disputeRows] = await Promise.all([
+        listTransactions(),
+        listNotifications(),
+        listDisputes(),
+      ]);
+
+      setRecords(
+        txRows.map((tx) => ({
+          id: tx.id,
+          recipient: tx.recipient_name,
+          address: tx.recipient_address,
+          amount: `${tx.amount_numeric} ${tx.token_symbol}`,
+          purpose: tx.purpose,
+          network: tx.network,
+          status:
+            tx.status === 'confirmed'
+              ? 'Confirmed'
+              : tx.status === 'failed' || tx.status === 'cancelled'
+                ? 'Failed'
+                : 'Pending',
+          verifiedControl: tx.verified_control,
+          timestamp: new Date(tx.created_at).toLocaleString(),
+        }))
+      );
+
+      setNotifications(
+        notifRows.map((n) => ({
+          id: n.id,
+          title: n.title,
+          detail: n.detail,
+          time: new Date(n.created_at).toLocaleString(),
+          category:
+            n.category === 'Payment' || n.category === 'Verification'
+              ? n.category
+              : 'Security',
+          read: n.is_read,
+        }))
+      );
+
+      const disputeMap: Record<string, DisputeCase> = {};
+      for (const d of disputeRows) {
+        disputeMap[d.transaction_id] = {
+          id: d.id,
+          recordId: d.transaction_id,
+          reason: d.reason,
+          summary: d.summary,
+          status:
+            d.status === 'evidence_submitted'
+              ? 'Evidence Submitted'
+              : d.status === 'under_review'
+                ? 'Under Review'
+                : 'Open',
+          createdAt: new Date(d.created_at).toLocaleString(),
+          evidence: (d.evidence ?? []).map((ev) => ({
+            id: ev.id,
+            label: ev.label,
+            note: ev.note,
+            addedAt: new Date(ev.created_at).toLocaleString(),
+          })),
+        };
+      }
+      setDisputes(disputeMap);
+    } catch (err) {
+      setSyncError(
+        err instanceof Error ? err.message : 'Unable to sync workspace data from Supabase.'
+      );
+    } finally {
+      setSyncingData(false);
+    }
+  }, [session.id]);
+
+  useEffect(() => {
+    refreshWorkspaceData();
+  }, [refreshWorkspaceData]);
+
+  const handleSaveDispute = async (dispute: DisputeCase) => {
     setDisputes((prev) => ({ ...prev, [dispute.recordId]: dispute }));
-    setNotifications((prev) => [
-      {
-        id: `n-dsp-${Date.now()}`,
-        title: `Dispute ${dispute.status.toLowerCase()}`,
-        detail: `${dispute.reason} (Record ${dispute.recordId})`,
-        time: 'Just now',
-        category: 'Verification',
-        read: false,
-      },
-      ...prev,
-    ]);
+    try {
+      await createDispute({
+        transactionId: dispute.recordId,
+        reason: dispute.reason,
+        summary: dispute.summary,
+      });
+      await refreshWorkspaceData();
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Failed to save dispute.');
+    }
+  };
+
+  const persistWalletRegistration = async (candidate: WalletState): Promise<WalletState> => {
+    try {
+      const { wallet: saved, challenge } = await registerWalletAndChallenge({
+        address: candidate.address,
+        network: candidate.network,
+        method: candidate.method,
+        recoveryBackedUp: candidate.recoveryBackedUp,
+      });
+      const sig = `0xword_sig_${challenge.nonce.replace(/-/g, '')}`;
+      await verifyWalletChallenge({ challengeId: challenge.id, signature: sig });
+      return {
+        ...candidate,
+        id: saved.id,
+        isVerified: true,
+      };
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Wallet registration failed.');
+      return candidate;
+    }
   };
 
   const updateWallet = (next: WalletState) => {
@@ -246,6 +335,38 @@ export const WordApp: React.FC<WordAppProps> = ({
 
       <main className="ws-main">
         <Container>
+          {syncError && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: '16px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(220, 38, 38, 0.12)',
+                border: '1px solid rgba(220, 38, 38, 0.35)',
+                color: '#fca5a5',
+                fontSize: '13px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+              }}
+            >
+              <span>{syncError}</span>
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                onClick={() => setSyncError(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          {syncingData && (
+            <p className="body-sm" style={{ marginBottom: '10px', color: 'var(--mute)' }}>
+              Syncing live records from Supabase...
+            </p>
+          )}
           {step !== 'workspace' ? (
             <div className="ws-flow-wrap">
               <div className="ws-stepper" aria-label={`Onboarding step ${stepIndex} of 3`}>
@@ -267,13 +388,15 @@ export const WordApp: React.FC<WordAppProps> = ({
               {step === 'wallet-setup' && (
                 <WalletSetup
                   onBack={() => setStep('welcome')}
-                  onCreateWallet={(newWallet) => {
-                    updateWallet(newWallet);
+                  onCreateWallet={async (newWallet) => {
+                    const persisted = await persistWalletRegistration(newWallet);
+                    updateWallet(persisted);
                     setPreviousStepBeforeSecurity('wallet-setup');
                     setStep('recovery-info');
                   }}
-                  onConnectWallet={(connectedWallet) => {
-                    updateWallet(connectedWallet);
+                  onConnectWallet={async (connectedWallet) => {
+                    const persisted = await persistWalletRegistration(connectedWallet);
+                    updateWallet(persisted);
                     setStep('wallet-confirm');
                   }}
                   onGoToImport={() => setStep('wallet-import')}
@@ -283,8 +406,9 @@ export const WordApp: React.FC<WordAppProps> = ({
               {step === 'wallet-import' && (
                 <WalletImport
                   onBack={() => setStep('wallet-setup')}
-                  onImportSuccess={(importedWallet) => {
-                    updateWallet(importedWallet);
+                  onImportSuccess={async (importedWallet) => {
+                    const persisted = await persistWalletRegistration(importedWallet);
+                    updateWallet(persisted);
                     setStep('wallet-confirm');
                   }}
                 />
@@ -295,7 +419,10 @@ export const WordApp: React.FC<WordAppProps> = ({
                   wallet={wallet}
                   isOnboarding={previousStepBeforeSecurity !== 'workspace'}
                   onBack={() => setStep(previousStepBeforeSecurity)}
-                  onConfirmBackup={() => {
+                  onConfirmBackup={async () => {
+                    if (wallet.id) {
+                      await updateWalletBackupFlag(wallet.id, true).catch(() => null);
+                    }
                     updateWallet({ ...wallet, recoveryBackedUp: true });
                     setStep('wallet-confirm');
                   }}
@@ -309,7 +436,9 @@ export const WordApp: React.FC<WordAppProps> = ({
                     setPreviousStepBeforeSecurity('wallet-confirm');
                     setStep('recovery-info');
                   }}
-                  onContinue={() => {
+                  onContinue={async () => {
+                    await updateMyProfile({ onboardingCompleted: true }).catch(() => null);
+                    await refreshWorkspaceData();
                     setActiveTab('dashboard');
                     setStep('workspace');
                   }}
@@ -323,6 +452,8 @@ export const WordApp: React.FC<WordAppProps> = ({
                   <DashboardView
                     session={session}
                     wallet={wallet}
+                    balances={balances}
+                    balancesLoading={balancesLoading}
                     balanceHidden={balanceHidden}
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}
@@ -372,6 +503,9 @@ export const WordApp: React.FC<WordAppProps> = ({
                 {activeTab === 'wallet' && (
                   <WalletOverviewView
                     wallet={wallet}
+                    balances={balances}
+                    balancesLoading={balancesLoading}
+                    onRefreshBalances={() => refreshBalances(wallet)}
                     balanceHidden={balanceHidden}
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}
@@ -389,14 +523,16 @@ export const WordApp: React.FC<WordAppProps> = ({
                 {activeTab === 'notifications' && (
                   <NotificationsView
                     notifications={notifications}
-                    onMarkAllRead={() =>
-                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-                    }
-                    onToggleRead={(id) =>
+                    onMarkAllRead={async () => {
+                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+                      await markAllNotificationsRead().catch(() => null);
+                    }}
+                    onToggleRead={async (id) => {
                       setNotifications((prev) =>
                         prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
-                      )
-                    }
+                      );
+                      await markNotificationRead(id).catch(() => null);
+                    }}
                   />
                 )}
 
@@ -413,6 +549,15 @@ export const WordApp: React.FC<WordAppProps> = ({
                     wallet={wallet}
                     balanceHidden={balanceHidden}
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
+                    onSwitchNetwork={async (nextNetwork: SupportedNetworkName) => {
+                      if (wallet.method === 'connected') {
+                        await switchBrowserNetwork(nextNetwork);
+                      }
+                      const updated = { ...wallet, network: nextNetwork };
+                      updateWallet(updated);
+                      await updateMyProfile({ defaultNetwork: nextNetwork }).catch(() => null);
+                      await refreshBalances(updated);
+                    }}
                     onOpenSecurity={() => {
                       setPreviousStepBeforeSecurity('workspace');
                       setStep('recovery-info');

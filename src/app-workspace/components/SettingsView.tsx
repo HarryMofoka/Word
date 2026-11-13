@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { LogOut, Shield } from 'lucide-react';
 import type { WalletState } from '../types';
+import {
+  NETWORK_CONFIGS,
+  type SupportedNetworkName,
+} from '../../config/blockchain';
 
 interface SettingsViewProps {
   wallet: WalletState;
   balanceHidden: boolean;
   onToggleBalance: () => void;
+  onSwitchNetwork: (network: SupportedNetworkName) => Promise<void>;
   onOpenSecurity: () => void;
   onLogout: () => void;
 }
@@ -14,11 +19,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   wallet,
   balanceHidden,
   onToggleBalance,
+  onSwitchNetwork,
   onOpenSecurity,
   onLogout,
 }) => {
   const [txAlerts, setTxAlerts] = useState(true);
   const [riskWarnings, setRiskWarnings] = useState(true);
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
+  const [networkError, setNetworkError] = useState<string | null>(null);
+
+  const handleNetworkSelect = async (next: SupportedNetworkName) => {
+    setSwitchingNetwork(true);
+    setNetworkError(null);
+    try {
+      await onSwitchNetwork(next);
+    } catch (err) {
+      setNetworkError(
+        err instanceof Error ? err.message : 'Unable to switch demonstration network.'
+      );
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  };
 
   return (
     <div className="ws-card" style={{ maxWidth: '680px' }}>
@@ -86,14 +108,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      <div className="ws-setting-row">
+      <div className="ws-setting-row" style={{ flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <p style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--ink)' }}>
-            Network environment
+            Demonstration network
           </p>
-          <p className="body-sm">UI screens are configured for {wallet.network} demonstration.</p>
+          <p className="body-sm">
+            Active: {NETWORK_CONFIGS[wallet.network]?.label ?? wallet.network} (Chain ID{' '}
+            {NETWORK_CONFIGS[wallet.network]?.chainId ?? 11155111})
+          </p>
+          {networkError && (
+            <p className="body-sm" style={{ color: '#fca5a5', marginTop: '4px' }} role="alert">
+              {networkError}
+            </p>
+          )}
         </div>
-        <span className="ws-badge">{wallet.network}</span>
+        <select
+          aria-label="Select demonstration network"
+          className="field-select"
+          style={{ width: 'auto', minWidth: '210px' }}
+          value={wallet.network}
+          disabled={switchingNetwork}
+          onChange={(e) => handleNetworkSelect(e.target.value as SupportedNetworkName)}
+        >
+          {Object.values(NETWORK_CONFIGS).map((cfg) => (
+            <option key={cfg.name} value={cfg.name}>
+              {cfg.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div

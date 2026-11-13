@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -9,6 +9,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
+import {
+  listAssistantMessages,
+  listAssistantSessions,
+  sendAssistantMessage,
+} from '../../../services/assistantService';
 
 type AdvancedSubView =
   | 'chat'
@@ -120,34 +125,114 @@ export const AssistantRiskHub: React.FC = () => {
   const [threads, setThreads] = useState<ConversationThread[]>(INITIAL_THREADS);
   const [activeThreadId, setActiveThreadId] = useState<string>(INITIAL_THREADS[0].id);
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+
+  useEffect(() => {
+    let active = true;
+    listAssistantSessions()
+      .then(async (sessions) => {
+        if (!active || sessions.length === 0) return;
+        const loadedThreads: ConversationThread[] = await Promise.all(
+          sessions.map(async (s) => {
+            const msgs = await listAssistantMessages(s.id).catch(() => []);
+            return {
+              id: s.id,
+              title: s.title,
+              date: new Date(s.updated_at).toLocaleString(),
+              preview: msgs[msgs.length - 1]?.content.slice(0, 80) || 'Saved assistant thread',
+              messages: msgs.map((m) => ({
+                id: m.id,
+                sender: m.role === 'user' ? 'user' : 'assistant',
+                text: m.content,
+              })),
+            };
+          })
+        );
+        if (active && loadedThreads.length > 0) {
+          setThreads(loadedThreads);
+          setActiveThreadId(loadedThreads[0].id);
+        }
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || sending) return;
 
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      sender: 'user',
-      text: trimmed,
-    };
-    const replyMsg: ChatMessage = {
-      id: `a-${Date.now() + 1}`,
-      sender: 'assistant',
-      text: 'UI preview response: I have reviewed your question. Remember that Word’s assistant only explains details in plain language—it never accesses private keys, signs transactions, or overrides security checks.',
-    };
-
-    setThreads((prev) =>
-      prev.map((th) =>
-        th.id === activeThread.id
-          ? { ...th, messages: [...th.messages, userMsg, replyMsg] }
-          : th
-      )
-    );
+    setSending(true);
     setInput('');
+    const isPersistedUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      activeThread.id
+    );
+
+    try {
+      const res = await sendAssistantMessage({
+        sessionId: isPersistedUuid ? activeThread.id : undefined,
+        message: trimmed,
+        title: trimmed.slice(0, 60),
+      });
+
+      const userMsg: ChatMessage = {
+        id: res.userMessage.id,
+        sender: 'user',
+        text: res.userMessage.content,
+      };
+      const replyMsg: ChatMessage = {
+        id: res.assistantMessage.id,
+        sender: 'assistant',
+        text: res.assistantMessage.content,
+      };
+
+      if (isPersistedUuid) {
+        setThreads((prev) =>
+          prev.map((th) =>
+            th.id === activeThread.id
+              ? { ...th, messages: [...th.messages, userMsg, replyMsg] }
+              : th
+          )
+        );
+      } else {
+        const newThread: ConversationThread = {
+          id: res.sessionId,
+          title: trimmed.slice(0, 60),
+          date: 'Just now',
+          preview: replyMsg.text.slice(0, 80),
+          messages: [userMsg, replyMsg],
+        };
+        setThreads((prev) => [newThread, ...prev]);
+        setActiveThreadId(res.sessionId);
+      }
+    } catch {
+      const fallbackReply: ChatMessage = {
+        id: `a-${Date.now()}`,
+        sender: 'assistant',
+        text: 'Unable to reach assistant service right now. Please try again in a moment.',
+      };
+      setThreads((prev) =>
+        prev.map((th) =>
+          th.id === activeThread.id
+            ? {
+                ...th,
+                messages: [
+                  ...th.messages,
+                  { id: `u-${Date.now()}`, sender: 'user', text: trimmed },
+                  fallbackReply,
+                ],
+              }
+            : th
+        )
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

@@ -6,6 +6,7 @@ import { HeroCanvas } from '../hero/HeroCanvas';
 import { DotMatrixHands } from '../hero/DotMatrixHands';
 import { WordLogo } from '../ui/WordLogo';
 import { Button } from '../ui/Button';
+import { signInWithEmail, signUpWithEmail } from '../../services/authService';
 import './Pages.css';
 
 interface AuthPageProps {
@@ -24,18 +25,58 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setLoading(true);
+
     const derivedName =
       name.trim() ||
       (email.includes('@') ? email.split('@')[0] : 'Word User');
 
-    onAuthenticated({
-      displayName: derivedName,
-      email: email.trim(),
-      isNewUser: !isSignIn,
-    });
+    try {
+      if (isSignIn) {
+        const res = await signInWithEmail({ email: email.trim(), password });
+        if (res.user) {
+          onAuthenticated({
+            id: res.user.id,
+            displayName:
+              (res.user.user_metadata?.display_name as string | undefined) || derivedName,
+            email: res.user.email ?? email.trim(),
+            isNewUser: false,
+          });
+        }
+      } else {
+        const res = await signUpWithEmail({
+          email: email.trim(),
+          password,
+          displayName: derivedName,
+        });
+        if (res.session && res.user) {
+          onAuthenticated({
+            id: res.user.id,
+            displayName: derivedName,
+            email: res.user.email ?? email.trim(),
+            isNewUser: true,
+          });
+        } else {
+          setInfoMsg(
+            'Account created! Please check your email inbox to confirm your address before signing in.'
+          );
+        }
+      }
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -143,9 +184,48 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               />
             </div>
 
+            {errorMsg && (
+              <p
+                role="alert"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(220, 38, 38, 0.12)',
+                  border: '1px solid rgba(220, 38, 38, 0.35)',
+                  color: '#fca5a5',
+                  fontSize: '13.5px',
+                }}
+              >
+                {errorMsg}
+              </p>
+            )}
+
+            {infoMsg && (
+              <p
+                role="status"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  color: '#6ee7b7',
+                  fontSize: '13.5px',
+                }}
+              >
+                {infoMsg}
+              </p>
+            )}
+
             <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-              <Button type="submit">
-                {isSignIn ? 'Sign in' : 'Create account'} <ArrowRight size={14} />
+              <Button type="submit" disabled={loading}>
+                {loading
+                  ? isSignIn
+                    ? 'Signing in...'
+                    : 'Creating account...'
+                  : isSignIn
+                    ? 'Sign in'
+                    : 'Create account'}{' '}
+                <ArrowRight size={14} />
               </Button>
 
               <button

@@ -17,10 +17,13 @@ import type {
   WalletState,
   WorkspaceTab,
 } from '../types';
+import type { WalletBalances } from '../../services/wdkWalletService';
 
 interface DashboardViewProps {
   session: UserSession;
   wallet: WalletState;
+  balances: WalletBalances | null;
+  balancesLoading: boolean;
   balanceHidden: boolean;
   onToggleBalance: () => void;
   records: PaymentRecord[];
@@ -34,6 +37,8 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   session,
   wallet,
+  balances,
+  balancesLoading,
   balanceHidden,
   onToggleBalance,
   records,
@@ -73,10 +78,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <p className="ws-balance-amount">
-            {balanceHidden ? '•••••• USDT' : '240.00 USDT'}
+            {balanceHidden
+              ? '•••••• USDT'
+              : balancesLoading && !balances
+                ? 'Loading USDT...'
+                : `${balances?.usdtBalance ?? '0.00'} USDT`}
           </p>
           <p className="body-sm" style={{ marginTop: '8px' }}>
-            {wallet.network} UI preview · Welcome back, {session.displayName}
+            {balances?.networkLabel ?? wallet.network} ·{' '}
+            {balanceHidden
+              ? '••••'
+              : `${balances?.nativeBalance ?? '0.00'} ${balances?.nativeSymbol ?? 'ETH'}`}{' '}
+            · Welcome back, {session.displayName}
           </p>
 
           {/* Quick Actions connected to real flows */}

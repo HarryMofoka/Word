@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { Check, CheckCircle2, Copy, Eye, EyeOff, Shield } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Eye, EyeOff, RefreshCw, Shield } from 'lucide-react';
 import type { PaymentRecord, WalletState } from '../types';
+import type { WalletBalances } from '../../services/wdkWalletService';
 
 interface WalletOverviewViewProps {
   wallet: WalletState;
+  balances: WalletBalances | null;
+  balancesLoading: boolean;
+  onRefreshBalances: () => void;
   balanceHidden: boolean;
   onToggleBalance: () => void;
   records: PaymentRecord[];
@@ -13,6 +17,9 @@ interface WalletOverviewViewProps {
 
 export const WalletOverviewView: React.FC<WalletOverviewViewProps> = ({
   wallet,
+  balances,
+  balancesLoading,
+  onRefreshBalances,
   balanceHidden,
   onToggleBalance,
   records,
@@ -45,21 +52,40 @@ export const WalletOverviewView: React.FC<WalletOverviewViewProps> = ({
             }}
           >
             <p className="eyebrow">WALLET OVERVIEW</p>
-            <button
-              type="button"
-              className="ws-ghost-btn"
-              onClick={onToggleBalance}
-            >
-              {balanceHidden ? <Eye size={14} /> : <EyeOff size={14} />}
-              <span>{balanceHidden ? 'Show' : 'Hide'}</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                onClick={onRefreshBalances}
+                disabled={balancesLoading}
+              >
+                <RefreshCw size={14} />
+                <span>{balancesLoading ? 'Syncing' : 'Refresh'}</span>
+              </button>
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                onClick={onToggleBalance}
+              >
+                {balanceHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                <span>{balanceHidden ? 'Show' : 'Hide'}</span>
+              </button>
+            </div>
           </div>
 
           <p className="ws-balance-amount">
-            {balanceHidden ? '•••••• USDT' : '240.00 USDT'}
+            {balanceHidden
+              ? '•••••• USDT'
+              : balancesLoading && !balances
+                ? 'Loading USDT...'
+                : `${balances?.usdtBalance ?? '0.00'} USDT`}
           </p>
           <p className="body-sm" style={{ marginTop: '8px', marginBottom: '22px' }}>
-            Available balance · {wallet.network} UI preview
+            {balances?.networkLabel ?? wallet.network} · Native:{' '}
+            {balanceHidden
+              ? '••••'
+              : `${balances?.nativeBalance ?? '0.00'} ${balances?.nativeSymbol ?? 'ETH'}`}
+            {balances?.error ? ` (${balances.error})` : ''}
           </p>
 
           <div

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import type { WalletState } from '../types';
+import { importWdkWallet } from '../../services/wdkWalletService';
 
 interface WalletImportProps {
   onBack: () => void;
@@ -11,33 +12,32 @@ interface WalletImportProps {
 export const WalletImport: React.FC<WalletImportProps> = ({ onBack, onImportSuccess }) => {
   const [phrase, setPhrase] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const words = phrase
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+    setError(null);
+    setImporting(true);
 
-    if (words.length !== 12 && words.length !== 24) {
-      setError('Enter a valid 12-word or 24-word recovery phrase separated by spaces.');
-      return;
+    try {
+      const derived = await importWdkWallet(phrase, 'Testnet');
+      // Clear phrase from component state immediately after deriving address
+      setPhrase('');
+      onImportSuccess({
+        address: derived.address,
+        method: 'imported',
+        network: derived.network,
+        recoveryBackedUp: true,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Enter a valid 12-word or 24-word BIP-39 recovery phrase.'
+      );
+    } finally {
+      setImporting(false);
     }
-
-    // Derive deterministic demonstration address from input length/chars
-    let hash = 0;
-    for (let i = 0; i < phrase.length; i++) {
-      hash = (hash * 31 + phrase.charCodeAt(i)) >>> 0;
-    }
-    const suffix = hash.toString(16).padStart(8, '0');
-    const demoAddr = `0x7a9c${suffix}4e12b83091f6a2d4c8e019b7a3f5`;
-
-    onImportSuccess({
-      address: demoAddr,
-      method: 'imported',
-      network: 'Testnet',
-      recoveryBackedUp: true,
-    });
   };
 
   return (
@@ -86,8 +86,8 @@ export const WalletImport: React.FC<WalletImportProps> = ({ onBack, onImportSucc
           <button type="button" className="auth-back-link" onClick={onBack}>
             <ArrowLeft size={15} /> Back to wallet options
           </button>
-          <Button type="submit">
-            Import wallet <ArrowRight size={14} />
+          <Button type="submit" disabled={importing}>
+            {importing ? 'Deriving wallet...' : 'Import wallet'} <ArrowRight size={14} />
           </Button>
         </div>
       </form>

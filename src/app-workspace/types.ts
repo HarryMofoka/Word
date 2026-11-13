@@ -52,16 +52,19 @@ export type QuickActionMode = 'send' | 'request' | 'verify' | null;
 export type WalletMethod = 'created' | 'connected' | 'imported';
 
 export interface UserSession {
+  id?: string;
   displayName: string;
   email: string;
   isNewUser: boolean;
 }
 
 export interface WalletState {
+  id?: string;
   address: string;
   method: WalletMethod;
-  network: 'Testnet';
+  network: 'Testnet' | 'Base Sepolia' | 'Polygon Amoy';
   recoveryBackedUp: boolean;
+  isVerified?: boolean;
   demoSeedWords?: string[];
 }
 

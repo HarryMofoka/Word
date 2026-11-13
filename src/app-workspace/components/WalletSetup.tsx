@@ -1,36 +1,16 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, KeyRound, Plus, Wallet } from 'lucide-react';
 import type { WalletState } from '../types';
+import {
+  connectBrowserWallet,
+  createWdkWallet,
+} from '../../services/wdkWalletService';
 
 interface WalletSetupProps {
   onBack: () => void;
   onCreateWallet: (wallet: WalletState) => void;
   onConnectWallet: (wallet: WalletState) => void;
   onGoToImport: () => void;
-}
-
-const DEMO_WORDS = [
-  'marble',
-  'harbor',
-  'lantern',
-  'timber',
-  'velvet',
-  'canyon',
-  'signal',
-  'meadow',
-  'cobalt',
-  'anchor',
-  'summit',
-  'beacon',
-];
-
-function generateDemoAddress(): string {
-  const hex = '0123456789abcdef';
-  let addr = '0x';
-  for (let i = 0; i < 40; i++) {
-    addr += hex[Math.floor(Math.random() * hex.length)];
-  }
-  return addr;
 }
 
 export const WalletSetup: React.FC<WalletSetupProps> = ({
@@ -41,52 +21,52 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
 }) => {
   const [connectStatus, setConnectStatus] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreate = () => {
-    onCreateWallet({
-      address: generateDemoAddress(),
-      method: 'created',
-      network: 'Testnet',
-      recoveryBackedUp: false,
-      demoSeedWords: DEMO_WORDS,
-    });
+  const handleCreate = async () => {
+    setIsCreating(true);
+    setConnectStatus(null);
+    try {
+      const created = await createWdkWallet('Testnet');
+      onCreateWallet({
+        address: created.address,
+        method: 'created',
+        network: created.network,
+        recoveryBackedUp: false,
+        demoSeedWords: created.seedWords,
+      });
+    } catch (err) {
+      setConnectStatus(
+        err instanceof Error
+          ? err.message
+          : 'Unable to initialize Tether WDK wallet locally.'
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleConnectExisting = async () => {
     setIsConnecting(true);
     setConnectStatus(null);
-    const eth = (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<string[]> } }).ethereum;
 
-    if (eth && typeof eth.request === 'function') {
-      try {
-        const accounts = await eth.request({ method: 'eth_requestAccounts' });
-        if (accounts && accounts[0]) {
-          onConnectWallet({
-            address: accounts[0],
-            method: 'connected',
-            network: 'Testnet',
-            recoveryBackedUp: true,
-          });
-          setIsConnecting(false);
-          return;
-        }
-      } catch {
-        setConnectStatus(
-          'Browser wallet connection was cancelled. You can try again or use a demonstration testnet wallet below.'
-        );
-        setIsConnecting(false);
-        return;
-      }
+    try {
+      const connected = await connectBrowserWallet('Testnet');
+      onConnectWallet({
+        address: connected.address,
+        method: 'connected',
+        network: connected.network,
+        recoveryBackedUp: true,
+      });
+    } catch (err) {
+      setConnectStatus(
+        err instanceof Error
+          ? err.message
+          : 'Browser wallet connection failed. Please try again.'
+      );
+    } finally {
+      setIsConnecting(false);
     }
-
-    // No browser extension detected: offer immediate testnet demo connection
-    onConnectWallet({
-      address: generateDemoAddress(),
-      method: 'connected',
-      network: 'Testnet',
-      recoveryBackedUp: true,
-    });
-    setIsConnecting(false);
   };
 
   return (
@@ -102,17 +82,23 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
       </p>
 
       <div className="ws-option-list">
-        <button type="button" className="ws-option-btn" onClick={handleCreate}>
+        <button
+          type="button"
+          className="ws-option-btn"
+          onClick={handleCreate}
+          disabled={isCreating || isConnecting}
+        >
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span className="ws-option-icon" aria-hidden="true">
               <Plus size={18} />
             </span>
             <div>
               <h2 className="heading-sm" style={{ fontSize: '15.5px', marginBottom: '4px' }}>
-                Create a new wallet
+                {isCreating ? 'Creating WDK wallet...' : 'Create a new wallet'}
               </h2>
               <p className="body-sm">
-                Generate a fresh testnet demonstration wallet and review its recovery phrase.
+                Generate a fresh self-custodial testnet wallet locally via Tether WDK and back up
+                its recovery phrase.
               </p>
             </div>
           </div>

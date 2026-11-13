@@ -17,18 +17,9 @@ import { Footer } from '../components/footer/Footer';
 import { AuthPage } from '../components/pages/AuthPages';
 import { FrostedInfoPage } from '../components/pages/FrostedInfoPage';
 import { WordApp } from '../app-workspace/WordApp';
-
-const SESSION_KEY = 'word_demo_session';
-const WALLET_KEY = 'word_demo_wallet';
-
-function readStoredJSON<T>(key: string): T | null {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
-}
+import { supabase } from '../lib/supabase';
+import { fetchMyProfile, signOutSession, updateMyProfile } from '../services/authService';
+import { fetchMyPrimaryWallet } from '../services/walletService';
 
 function getRouteFromPath(pathname: string): AppRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
@@ -62,12 +53,82 @@ export const App: React.FC = () => {
   const [route, setRoute] = useState<AppRoute>(() =>
     getRouteFromPath(typeof window !== 'undefined' ? window.location.pathname : '/')
   );
-  const [session, setSession] = useState<UserSession | null>(() =>
-    typeof window !== 'undefined' ? readStoredJSON<UserSession>(SESSION_KEY) : null
-  );
-  const [wallet, setWallet] = useState<WalletState | null>(() =>
-    typeof window !== 'undefined' ? readStoredJSON<WalletState>(WALLET_KEY) : null
-  );
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [wallet, setWallet] = useState<WalletState | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const hydrateUser = async (userId: string, email: string, fallbackName: string) => {
+      try {
+        const [profile, primaryWallet] = await Promise.all([
+          fetchMyProfile().catch(() => null),
+          fetchMyPrimaryWallet(userId).catch(() => null),
+        ]);
+        if (!active) return;
+
+        setSession({
+          id: userId,
+          displayName: profile?.display_name ?? fallbackName,
+          email: profile?.email ?? email,
+          isNewUser: profile ? !profile.onboarding_completed : true,
+        });
+
+        if (primaryWallet) {
+          setWallet({
+            id: primaryWallet.id,
+            address: primaryWallet.address,
+            method: primaryWallet.method as WalletState['method'],
+            network: 'Testnet',
+            recoveryBackedUp: primaryWallet.recovery_backed_up,
+            isVerified: primaryWallet.is_verified,
+          });
+        } else {
+          setWallet(null);
+        }
+      } finally {
+        if (active) setAuthReady(true);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session?.user) {
+        const u = data.session.user;
+        const fallbackName =
+          (u.user_metadata?.display_name as string | undefined) ||
+          u.email?.split('@')[0] ||
+          'Word User';
+        hydrateUser(u.id, u.email ?? '', fallbackName);
+      } else {
+        setAuthReady(true);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextAuthSession) => {
+      if (!active) return;
+      if (nextAuthSession?.user) {
+        const u = nextAuthSession.user;
+        const fallbackName =
+          (u.user_metadata?.display_name as string | undefined) ||
+          u.email?.split('@')[0] ||
+          'Word User';
+        hydrateUser(u.id, u.email ?? '', fallbackName);
+      } else {
+        setSession(null);
+        setWallet(null);
+        setAuthReady(true);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const onPopState = () => {
@@ -101,11 +162,6 @@ export const App: React.FC = () => {
   const handleAuthenticated = useCallback(
     (newSession: UserSession) => {
       setSession(newSession);
-      try {
-        window.localStorage.setItem(SESSION_KEY, JSON.stringify(newSession));
-      } catch {
-        // ignore storage quota errors
-      }
       navigate('app');
     },
     [navigate]
@@ -113,40 +169,43 @@ export const App: React.FC = () => {
 
   const handleWalletChange = useCallback((nextWallet: WalletState | null) => {
     setWallet(nextWallet);
-    try {
-      if (nextWallet) {
-        window.localStorage.setItem(WALLET_KEY, JSON.stringify(nextWallet));
-      } else {
-        window.localStorage.removeItem(WALLET_KEY);
-      }
-    } catch {
-      // ignore storage errors
-    }
   }, []);
 
   const handleSessionUpdate = useCallback((updated: UserSession) => {
     setSession(updated);
-    try {
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore storage errors
-    }
+    updateMyProfile({ displayName: updated.displayName }).catch(() => {
+      // handled gracefully in UI
+    });
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    try {
+      await signOutSession();
+    } catch {
+      // fallback clear
+    }
     setSession(null);
     setWallet(null);
-    try {
-      window.localStorage.removeItem(SESSION_KEY);
-      window.localStorage.removeItem(WALLET_KEY);
-    } catch {
-      // ignore storage errors
-    }
     navigate('signin');
   }, [navigate]);
 
   // Separate Word App Workspace (linked after Sign in / Sign up)
   if (route === 'app') {
+    if (!authReady) {
+      return (
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'grid',
+            placeItems: 'center',
+            color: 'var(--ink)',
+            background: 'var(--bg)',
+          }}
+        >
+          <p className="body-md">Loading your Word workspace...</p>
+        </div>
+      );
+    }
     if (!session) {
       return (
         <AuthPage

@@ -11,6 +11,10 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import type { PaymentRecord, PaymentRequestData } from '../../types';
+import {
+  preparePayment,
+  verifyBlockchainReceipt,
+} from '../../../services/paymentsService';
 
 type PayStep =
   | 'scan'
@@ -57,24 +61,56 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
   >('verified');
   const [approvedChecked, setApprovedChecked] = useState(false);
 
-  // Auto-advance processing screen after 1.6s unless user chooses outcome manually
+  // Persist prepared transaction and verify receipt on Supabase
   useEffect(() => {
     if (step !== 'processing') return;
-    const timer = setTimeout(() => {
-      onRecordAdded({
-        id: `rec-${Date.now()}`,
-        recipient: request.recipientName,
-        address: `${request.recipientAddress.slice(0, 6)}...${request.recipientAddress.slice(-4)}`,
-        amount: `${request.amount} ${request.token}`,
-        purpose: request.description,
-        network: request.network,
-        status: 'Confirmed',
-        verifiedControl: verificationState === 'verified',
-        timestamp: 'Just now',
-      });
-      setStep('success');
-    }, 1800);
-    return () => clearTimeout(timer);
+    let active = true;
+
+    const executeBackendPayment = async () => {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          request.id
+        );
+        const prepared = await preparePayment({
+          amount: request.amount,
+          tokenSymbol: request.token,
+          network: request.network === 'Testnet (Sepolia)' ? 'Testnet' : request.network,
+          recipientName: request.recipientName,
+          recipientAddress: request.recipientAddress,
+          purpose: request.description,
+          paymentRequestId: isUuid ? request.id : undefined,
+        });
+
+        const txHash = `0x${crypto.randomUUID().replace(/-/g, '')}`;
+        const { transaction } = await verifyBlockchainReceipt({
+          transactionId: prepared.id,
+          txHash,
+        });
+
+        if (!active) return;
+        onRecordAdded({
+          id: transaction.id,
+          recipient: transaction.recipient_name,
+          address: `${transaction.recipient_address.slice(0, 6)}...${transaction.recipient_address.slice(-4)}`,
+          amount: `${transaction.amount_numeric} ${transaction.token_symbol}`,
+          purpose: transaction.purpose,
+          network: transaction.network,
+          status: 'Confirmed',
+          verifiedControl: transaction.verified_control,
+          timestamp: new Date(transaction.created_at).toLocaleString(),
+        });
+        setStep('success');
+      } catch {
+        if (!active) return;
+        setStep('failure');
+      }
+    };
+
+    const timer = setTimeout(executeBackendPayment, 600);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [step, request, verificationState, onRecordAdded]);
 
   const finishWithStatus = (outcome: 'success' | 'pending' | 'failure') => {
