@@ -1,0 +1,141 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+  background-color: rgba(247, 247, 245, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(229, 229, 225, 0.7);
+}
+
+.navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 68px;
+  gap: 24px;
+}
+
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navbar-link {
+  font-size: 13.5px;
+  font-weight: 450;
+  color: #5f5f5d;
+  transition: color 0.2s ease;
+}
+
+.navbar-link:hover {
+  color: var(--ink);
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.navbar-get-started {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #5f5f5d;
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+  transition: color 0.2s ease;
+}
+
+.navbar-get-started:hover {
+  color: var(--ink);
+}
+
+.navbar-signin {
+  background-color: var(--ink);
+  color: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 8px 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.navbar-signin:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.navbar-mobile-controls {
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.navbar-burger {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-panel {
+  border-top: 1px solid var(--line);
+  background-color: var(--bg);
+  padding: 16px var(--container-pad) 24px;
+}
+
+.mobile-menu-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.mobile-menu-link {
+  padding: 10px 4px;
+  font-size: 15px;
+  font-weight: 450;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+.mobile-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .navbar-links,
+  .navbar-actions {
+    display: none;
+  }
+
+  .navbar-mobile-controls {
+    display: flex;
+  }
+}
+

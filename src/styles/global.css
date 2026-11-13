@@ -1,0 +1,141 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding-inline: var(--container-pad);
+}
+
+.section {
+  position: relative;
+  padding-block: var(--section-pad-y);
+  border-top: 1px solid var(--line);
+}
+
+.section--soft {
+  background-color: var(--soft);
+}
+
+.section--no-border {
+  border-top: none;
+}
+
+/* Dot-matrix subtle decorative motif */
+.dot-motif {
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* Rainbow-underglow pill button */
+.pill-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pill-btn-glow {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -6px;
+  height: 14px;
+  background: var(--rainbow);
+  filter: blur(11px);
+  opacity: 0.62;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease,
+    filter 0.3s ease;
+}
+
+.pill-btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--ink);
+  color: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 13px 26px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.2s ease;
+}
+
+.pill-btn-wrap:hover .pill-btn {
+  transform: translateY(-1px);
+}
+
+.pill-btn-wrap:hover .pill-btn-glow {
+  opacity: 0.88;
+  filter: blur(13px);
+  transform: scaleX(1.06) translateY(1px);
+}
+
+.pill-btn--compact {
+  padding: 9px 18px;
+  font-size: 13.5px;
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sub);
+  transition: color 0.2s ease;
+}
+
+.text-link:hover {
+  color: var(--ink);
+}
+
