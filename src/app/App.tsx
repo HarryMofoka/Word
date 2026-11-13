@@ -124,6 +124,15 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const handleSessionUpdate = useCallback((updated: UserSession) => {
+    setSession(updated);
+    try {
+      window.localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
   const handleLogout = useCallback(() => {
     setSession(null);
     setWallet(null);
@@ -152,6 +161,7 @@ export const App: React.FC = () => {
         session={session}
         initialWallet={wallet}
         onWalletChange={handleWalletChange}
+        onSessionChange={handleSessionUpdate}
         onLogout={handleLogout}
         onNavigateMarketing={navigate}
       />

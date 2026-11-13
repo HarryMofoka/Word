@@ -266,3 +266,200 @@
   }
 }
 
+/* ==========================================================================
+   MAIN APPLICATION TABS & SCREENS
+   ========================================================================== */
+
+.ws-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-nav-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 450;
+  color: var(--sub);
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.ws-nav-tab:hover {
+  color: var(--ink);
+}
+
+.ws-nav-tab.is-active {
+  color: var(--ink);
+  background-color: var(--white);
+  border-color: var(--line);
+}
+
+.ws-unread-badge {
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background-color: var(--ink);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-mobile-tabs {
+  display: none;
+  border-top: 1px solid var(--line);
+  background-color: var(--bg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ws-mobile-tabs-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--container-pad);
+}
+
+.ws-balance-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.ws-balance-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--rainbow);
+  opacity: 0.78;
+}
+
+.ws-balance-amount {
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  color: var(--ink);
+}
+
+.ws-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.ws-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background-color: var(--bg);
+  border: 1px solid var(--line);
+  text-align: left;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.ws-quick-btn:hover {
+  background-color: var(--white);
+  border-color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.ws-notif-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ws-notif-row:last-child {
+  border-bottom: none;
+}
+
+.ws-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--ink);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.ws-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ws-setting-row:last-child {
+  border-bottom: none;
+}
+
+.ws-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background-color: var(--line);
+  border: none;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+
+.ws-toggle.is-on {
+  background-color: var(--ink);
+}
+
+.ws-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background-color: var(--white);
+  transition: transform 0.2s ease;
+}
+
+.ws-toggle.is-on .ws-toggle-knob {
+  transform: translateX(20px);
+}
+
+@media (max-width: 960px) {
+  .ws-nav-tabs {
+    display: none;
+  }
+
+  .ws-mobile-tabs {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  .ws-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+

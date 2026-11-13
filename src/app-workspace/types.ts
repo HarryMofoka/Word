@@ -6,6 +6,15 @@ export type OnboardingStep =
   | 'wallet-confirm'
   | 'workspace';
 
+export type WorkspaceTab =
+  | 'dashboard'
+  | 'wallet'
+  | 'notifications'
+  | 'profile'
+  | 'settings';
+
+export type QuickActionMode = 'send' | 'request' | 'verify' | null;
+
 export type WalletMethod = 'created' | 'connected' | 'imported';
 
 export interface UserSession {
@@ -29,8 +38,16 @@ export interface PaymentRecord {
   amount: string;
   purpose: string;
   network: string;
-  status: 'Confirmed' | 'Pending';
+  status: 'Confirmed' | 'Pending' | 'Failed';
   verifiedControl: boolean;
   timestamp: string;
 }
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  detail: string;
+  time: string;
+  category: 'Payment' | 'Verification' | 'Security';
+  read: boolean;
+}

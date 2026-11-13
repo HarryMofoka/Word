@@ -1,29 +1,102 @@
 import React, { useState } from 'react';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import type { AppRoute } from '../types';
 import { Container } from '../components/layout/Container';
 import { WordLogo } from '../components/ui/WordLogo';
-import type { OnboardingStep, UserSession, WalletState } from './types';
+import type {
+  AppNotification,
+  OnboardingStep,
+  PaymentRecord,
+  UserSession,
+  WalletState,
+  WorkspaceTab,
+} from './types';
 import { OnboardingWelcome } from './components/OnboardingWelcome';
 import { WalletSetup } from './components/WalletSetup';
 import { WalletImport } from './components/WalletImport';
 import { SecurityRecovery } from './components/SecurityRecovery';
 import { WalletConfirmation } from './components/WalletConfirmation';
-import { WorkspaceHome } from './components/WorkspaceHome';
+import { DashboardView } from './components/DashboardView';
+import { WalletOverviewView } from './components/WalletOverviewView';
+import { NotificationsView } from './components/NotificationsView';
+import { ProfileView } from './components/ProfileView';
+import { SettingsView } from './components/SettingsView';
 import './Workspace.css';
 
 interface WordAppProps {
   session: UserSession;
   initialWallet: WalletState | null;
   onWalletChange: (wallet: WalletState | null) => void;
+  onSessionChange: (session: UserSession) => void;
   onLogout: () => void;
   onNavigateMarketing: (route: AppRoute) => void;
 }
+
+const INITIAL_RECORDS: PaymentRecord[] = [
+  {
+    id: 'rec-1',
+    recipient: 'Thabo M.',
+    address: '0x4b8f...91e2',
+    amount: '20.00 USDT',
+    purpose: 'Laptop purchase',
+    network: 'Testnet',
+    status: 'Confirmed',
+    verifiedControl: true,
+    timestamp: 'Today, 09:42',
+  },
+  {
+    id: 'rec-2',
+    recipient: 'Lerato K.',
+    address: '0x9a12...3c40',
+    amount: '45.00 USDT',
+    purpose: 'Design retainer',
+    network: 'Testnet',
+    status: 'Confirmed',
+    verifiedControl: true,
+    timestamp: 'Yesterday',
+  },
+];
+
+const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'n-1',
+    title: 'Transaction confirmed on Testnet',
+    detail: '20.00 USDT to Thabo M. for Laptop purchase is confirmed.',
+    time: '12m ago',
+    category: 'Payment',
+    read: false,
+  },
+  {
+    id: 'n-2',
+    title: 'Recipient wallet control checked',
+    detail: 'Cryptographic signature verification succeeded for 0x4b8f...91e2.',
+    time: '14m ago',
+    category: 'Verification',
+    read: false,
+  },
+  {
+    id: 'n-3',
+    title: 'Self-custody reminder',
+    detail: 'Always confirm recipient address, network, and fee before signing.',
+    time: 'Yesterday',
+    category: 'Security',
+    read: true,
+  },
+];
+
+const TABS: { id: WorkspaceTab; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'wallet', label: 'Wallet' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'settings', label: 'Settings' },
+];
 
 export const WordApp: React.FC<WordAppProps> = ({
   session,
   initialWallet,
   onWalletChange,
+  onSessionChange,
   onLogout,
   onNavigateMarketing,
 }) => {
@@ -35,10 +108,17 @@ export const WordApp: React.FC<WordAppProps> = ({
   const [previousStepBeforeSecurity, setPreviousStepBeforeSecurity] =
     useState<OnboardingStep>('workspace');
 
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
+  const [balanceHidden, setBalanceHidden] = useState(false);
+  const [records, setRecords] = useState<PaymentRecord[]>(INITIAL_RECORDS);
+  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+
   const updateWallet = (next: WalletState) => {
     setWallet(next);
     onWalletChange(next);
   };
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const stepIndex =
     step === 'welcome'
@@ -68,28 +148,39 @@ export const WordApp: React.FC<WordAppProps> = ({
             <span className="ws-badge">App</span>
           </div>
 
+          {step === 'workspace' && (
+            <nav className="ws-nav-tabs" aria-label="Application Navigation">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`ws-nav-tab ${activeTab === tab.id ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <span>{tab.label}</span>
+                  {tab.id === 'notifications' && unreadCount > 0 && (
+                    <span className="ws-unread-badge">{unreadCount}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          )}
+
           <div className="ws-topbar-actions">
             {wallet && (
-              <div className="ws-wallet-chip" title={wallet.address}>
+              <button
+                type="button"
+                className="ws-wallet-chip"
+                title={wallet.address}
+                onClick={() => {
+                  if (step === 'workspace') setActiveTab('wallet');
+                }}
+              >
                 <span className="ws-dot-live" aria-hidden="true" />
                 <span>{shortAddr}</span>
                 <span className="ws-wallet-net" style={{ color: 'var(--mute)' }}>
                   · {wallet.network}
                 </span>
-              </div>
-            )}
-
-            {wallet && step === 'workspace' && (
-              <button
-                type="button"
-                className="ws-ghost-btn"
-                onClick={() => {
-                  setPreviousStepBeforeSecurity('workspace');
-                  setStep('recovery-info');
-                }}
-              >
-                <Shield size={14} />
-                <span className="ws-btn-label-hide">Security</span>
               </button>
             )}
 
@@ -100,10 +191,31 @@ export const WordApp: React.FC<WordAppProps> = ({
               aria-label="Log out"
             >
               <LogOut size={14} />
-              <span>Log out</span>
+              <span className="ws-btn-label-hide">Log out</span>
             </button>
           </div>
         </div>
+
+        {step === 'workspace' && (
+          <nav className="ws-mobile-tabs" aria-label="Mobile Application Navigation">
+            <div className="ws-mobile-tabs-inner">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`ws-nav-tab ${activeTab === tab.id ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{ flexShrink: 0 }}
+                >
+                  <span>{tab.label}</span>
+                  {tab.id === 'notifications' && unreadCount > 0 && (
+                    <span className="ws-unread-badge">{unreadCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
       </header>
 
       <main className="ws-main">
@@ -171,20 +283,81 @@ export const WordApp: React.FC<WordAppProps> = ({
                     setPreviousStepBeforeSecurity('wallet-confirm');
                     setStep('recovery-info');
                   }}
-                  onContinue={() => setStep('workspace')}
+                  onContinue={() => {
+                    setActiveTab('dashboard');
+                    setStep('workspace');
+                  }}
                 />
               )}
             </div>
           ) : (
             wallet && (
-              <WorkspaceHome
-                session={session}
-                wallet={wallet}
-                onOpenSecurity={() => {
-                  setPreviousStepBeforeSecurity('workspace');
-                  setStep('recovery-info');
-                }}
-              />
+              <>
+                {activeTab === 'dashboard' && (
+                  <DashboardView
+                    session={session}
+                    wallet={wallet}
+                    balanceHidden={balanceHidden}
+                    onToggleBalance={() => setBalanceHidden((p) => !p)}
+                    records={records}
+                    notifications={notifications}
+                    onCreateDemoRecord={(rec) => setRecords((prev) => [rec, ...prev])}
+                    onNavigateTab={setActiveTab}
+                    onOpenSecurity={() => {
+                      setPreviousStepBeforeSecurity('workspace');
+                      setStep('recovery-info');
+                    }}
+                  />
+                )}
+
+                {activeTab === 'wallet' && (
+                  <WalletOverviewView
+                    wallet={wallet}
+                    balanceHidden={balanceHidden}
+                    onToggleBalance={() => setBalanceHidden((p) => !p)}
+                    records={records}
+                    onOpenSecurity={() => {
+                      setPreviousStepBeforeSecurity('workspace');
+                      setStep('recovery-info');
+                    }}
+                  />
+                )}
+
+                {activeTab === 'notifications' && (
+                  <NotificationsView
+                    notifications={notifications}
+                    onMarkAllRead={() =>
+                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                    }
+                    onToggleRead={(id) =>
+                      setNotifications((prev) =>
+                        prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
+                      )
+                    }
+                  />
+                )}
+
+                {activeTab === 'profile' && (
+                  <ProfileView
+                    session={session}
+                    wallet={wallet}
+                    onUpdateSession={onSessionChange}
+                  />
+                )}
+
+                {activeTab === 'settings' && (
+                  <SettingsView
+                    wallet={wallet}
+                    balanceHidden={balanceHidden}
+                    onToggleBalance={() => setBalanceHidden((p) => !p)}
+                    onOpenSecurity={() => {
+                      setPreviousStepBeforeSecurity('workspace');
+                      setStep('recovery-info');
+                    }}
+                    onLogout={onLogout}
+                  />
+                )}
+              </>
             )
           )}
         </Container>
