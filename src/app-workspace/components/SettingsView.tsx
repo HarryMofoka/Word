@@ -5,6 +5,7 @@ import {
   NETWORK_CONFIGS,
   type SupportedNetworkName,
 } from '../../config/blockchain';
+import { getPrivacyDisclosureSummary } from '../../services/privacyService';
 
 interface SettingsViewProps {
   wallet: WalletState;
@@ -137,6 +138,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </option>
           ))}
         </select>
+      </div>
+
+      <div
+        style={{
+          marginTop: '20px',
+          padding: '14px 16px',
+          borderRadius: '10px',
+          border: '1px solid var(--border-subtle, rgba(255,255,255,0.12))',
+          background: 'rgba(255,255,255,0.02)',
+        }}
+      >
+        <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
+          Privacy, data retention &amp; AI disclosure
+        </p>
+        <p className="body-sm" style={{ marginBottom: '10px' }}>
+          {getPrivacyDisclosureSummary().aiDataHandling.summary}
+        </p>
+        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', lineHeight: 1.5 }}>
+          {getPrivacyDisclosureSummary().collectedCategories.map((item) => (
+            <li key={item.category} style={{ marginBottom: '4px' }}>
+              <strong>{item.category}:</strong> {item.fields.join(', ')} —{' '}
+              <span>Retention: {item.retentionPeriod}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div

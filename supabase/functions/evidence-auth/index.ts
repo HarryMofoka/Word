@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
         objectPath,
         signedUrl: signed.signedUrl,
         token: signed.token,
-      });
+      }, 200, req);
     }
 
     if (action === 'create_download_url') {
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
         throw new AppError(500, 'SIGNED_URL_FAILED', signErr?.message ?? 'Could not create download URL.');
       }
 
-      return jsonResponse({ signedUrl: signed.signedUrl });
+      return jsonResponse({ signedUrl: signed.signedUrl }, 200, req);
     }
 
     if (action === 'add_note' || action === 'commit_evidence') {
@@ -117,12 +117,12 @@ Deno.serve(async (req: Request) => {
         metadata: { disputeId, hasFile: Boolean(storagePath) },
       });
 
-      return jsonResponse({ evidence: item }, 201);
+      return jsonResponse({ evidence: item }, 201, req);
     }
 
     throw new AppError(400, 'UNKNOWN_ACTION', `Unsupported action: ${action}`);
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

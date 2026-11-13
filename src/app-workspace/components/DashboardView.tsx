@@ -229,6 +229,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
+          {records.length === 0 && (
+            <p className="body-sm" style={{ padding: '12px 0', color: 'var(--mute)' }}>
+              No transactions yet. Create a payment request or send a payment to get started.
+            </p>
+          )}
           {records.map((rec) => (
             <button
               key={rec.id}
@@ -294,6 +299,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
+          {notifications.length === 0 && (
+            <p className="body-sm" style={{ padding: '12px 0', color: 'var(--mute)' }}>
+              No notifications yet. Activity alerts will appear here.
+            </p>
+          )}
           {notifications.slice(0, 3).map((n) => (
             <div key={n.id} className="ws-notif-row">
               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>

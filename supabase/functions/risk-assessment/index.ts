@@ -405,9 +405,10 @@ Deno.serve(async (req: Request) => {
 
                 return jsonResponse(
                   { assessment, categoryBreakdown: breakdown, assessedAt },
-                  201
+                  201,
+                  req
                 );
               } catch (err) {
-                return errorResponse(err);
+                return errorResponse(err, req);
               }
             });

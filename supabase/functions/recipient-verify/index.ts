@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
           verifiedAt: null,
           network: reqRow.network,
           disclaimer: IDENTITY_DISCLAIMER,
-        });
+        }, 200, req);
       }
 
       const meta = (latest.proof_metadata ?? {}) as Record<string, unknown>;
@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
         verifiedAt: latest.verified_at,
         network: latest.network,
         disclaimer: IDENTITY_DISCLAIMER,
-      });
+      }, 200, req);
     }
 
     if (req.method !== 'POST') {
@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
         metadata: { paymentRequestId, address: reqRow.recipient_address, network },
       });
 
-      return jsonResponse({ challenge, disclaimer: IDENTITY_DISCLAIMER }, 201);
+      return jsonResponse({ challenge, disclaimer: IDENTITY_DISCLAIMER }, 201, req);
     }
 
     if (action === 'verify_signature') {
@@ -301,12 +301,12 @@ Deno.serve(async (req: Request) => {
         recoveredAddress,
         verifiedAt: nowIso,
         disclaimer: IDENTITY_DISCLAIMER,
-      });
+      }, 200, req);
     }
 
     throw new AppError(400, 'UNKNOWN_ACTION', `Unsupported action: ${action}`);
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

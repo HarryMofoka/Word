@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
           .eq('agreement_id', id)
           .order('version_number', { ascending: false });
 
-        return jsonResponse({ agreement, versions: versions ?? [] });
+        return jsonResponse({ agreement, versions: versions ?? [] }, 200, req);
       }
 
       const { data, error } = await userClient
@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
         .limit(50);
 
       if (error) throw new AppError(500, 'FETCH_FAILED', error.message);
-      return jsonResponse({ agreements: data ?? [] });
+      return jsonResponse({ agreements: data ?? [] }, 200, req);
     }
 
     if (req.method === 'POST') {
@@ -129,7 +129,7 @@ Deno.serve(async (req: Request) => {
           metadata: { title, purpose, amount: normalizedDecimal, tokenSymbol, version: 1 },
         });
 
-        return jsonResponse({ agreement: created }, 201);
+        return jsonResponse({ agreement: created }, 201, req);
       }
 
       if (action === 'accept') {
@@ -190,7 +190,7 @@ Deno.serve(async (req: Request) => {
           },
         });
 
-        return jsonResponse({ agreement: updated });
+        return jsonResponse({ agreement: updated }, 200, req);
       }
 
       if (action === 'revise') {
@@ -287,7 +287,7 @@ Deno.serve(async (req: Request) => {
           metadata: { version: nextVersion, changeNote },
         });
 
-        return jsonResponse({ agreement: updated });
+        return jsonResponse({ agreement: updated }, 200, req);
       }
 
       throw new AppError(400, 'UNKNOWN_ACTION', `Unsupported action: ${action}`);
@@ -295,6 +295,6 @@ Deno.serve(async (req: Request) => {
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });

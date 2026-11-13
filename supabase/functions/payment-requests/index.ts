@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
           alreadyPaid: Boolean(existingTx) || checked.status === 'completed',
           existingTransactionStatus: existingTx?.status ?? null,
           existingTxHash: existingTx?.tx_hash ?? null,
-        });
+        }, 200, req);
       }
 
       if (id) {
@@ -102,7 +102,7 @@ Deno.serve(async (req: Request) => {
           alreadyPaid: Boolean(existingTx) || checked.status === 'completed',
           existingTransactionStatus: existingTx?.status ?? null,
           existingTxHash: existingTx?.tx_hash ?? null,
-        });
+        }, 200, req);
       }
 
       const { data, error } = await userClient
@@ -116,7 +116,7 @@ Deno.serve(async (req: Request) => {
       const checkedList = await Promise.all(
         (data ?? []).map((row) => expireIfPastDue(adminClient, row))
       );
-      return jsonResponse({ requests: checkedList });
+      return jsonResponse({ requests: checkedList }, 200, req);
     }
 
     if (req.method === 'POST') {
@@ -190,12 +190,12 @@ Deno.serve(async (req: Request) => {
         metadata: { shareCode, tokenSymbol, amount: normalizedDecimal, network },
       });
 
-      return jsonResponse({ request: created }, 201);
+      return jsonResponse({ request: created }, 201, req);
     }
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

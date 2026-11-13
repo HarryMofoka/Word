@@ -169,9 +169,9 @@ Deno.serve(async (req: Request) => {
       metadata: { amount: normalizedDecimal, tokenSymbol, network, recipientAddress },
     });
 
-    return jsonResponse({ transaction }, 201);
+    return jsonResponse({ transaction }, 201, req);
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

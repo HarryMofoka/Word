@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
         metadata: { walletId: wallet.id, address, network, method },
       });
 
-      return jsonResponse({ wallet, challenge }, 201);
+      return jsonResponse({ wallet, challenge }, 201, req);
     }
 
     if (action === 'verify_challenge') {
@@ -192,12 +192,12 @@ Deno.serve(async (req: Request) => {
         metadata: { challengeId: challenge.id, address: challenge.address },
       });
 
-      return jsonResponse({ verified: true, wallet: updatedWallet, verifiedAt: nowIso });
+      return jsonResponse({ verified: true, wallet: updatedWallet, verifiedAt: nowIso }, 200, req);
     }
 
     throw new AppError(400, 'UNKNOWN_ACTION', `Unsupported action: ${action}`);
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

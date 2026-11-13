@@ -233,6 +233,7 @@ describe('Phase 10: Application Security, Privacy & Reliability', () => {
       expect(code, `${filePath} must call requireAuth`).toMatch(/requireAuth\s*\(/);
       expect(code, `${filePath} must call enforceRateLimit`).toMatch(/enforceRateLimit\s*\(/);
       expect(code, `${filePath} must call handleCors`).toMatch(/handleCors\s*\(/);
+      expect(code, `${filePath} must pass req to errorResponse`).toMatch(/errorResponse\s*\(\s*err\s*,\s*req\s*\)/);
     }
   });
 

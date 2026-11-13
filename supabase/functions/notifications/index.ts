@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
         .limit(50);
 
       if (error) throw new AppError(500, 'NOTIFICATIONS_FETCH_FAILED', error.message);
-      return jsonResponse({ notifications: data ?? [] });
+      return jsonResponse({ notifications: data ?? [] }, 200, req);
     }
 
     if (req.method === 'PATCH') {
@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
           .eq('is_read', false);
 
         if (error) throw new AppError(500, 'MARK_READ_FAILED', error.message);
-        return jsonResponse({ updated: true });
+        return jsonResponse({ updated: true }, 200, req);
       }
 
       const notificationId = requireUuid(body.notificationId, 'notificationId');
@@ -50,12 +50,12 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (error) throw new AppError(400, 'MARK_READ_FAILED', error.message);
-      return jsonResponse({ notification: data });
+      return jsonResponse({ notification: data }, 200, req);
     }
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

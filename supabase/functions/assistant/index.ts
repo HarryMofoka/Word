@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
           .order('created_at', { ascending: true });
 
         if (error) throw new AppError(500, 'MESSAGES_FETCH_FAILED', error.message);
-        return jsonResponse({ messages: messages ?? [] });
+        return jsonResponse({ messages: messages ?? [] }, 200, req);
       }
 
       const { data: sessions, error } = await userClient
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
         .limit(30);
 
       if (error) throw new AppError(500, 'SESSIONS_FETCH_FAILED', error.message);
-      return jsonResponse({ sessions: sessions ?? [] });
+      return jsonResponse({ sessions: sessions ?? [] }, 200, req);
     }
 
     if (req.method === 'POST') {
@@ -135,12 +135,12 @@ Deno.serve(async (req: Request) => {
         .update({ updated_at: new Date().toISOString() })
         .eq('id', sessionId);
 
-      return jsonResponse({ sessionId, userMessage: userMsg, assistantMessage: assistantMsg }, 201);
+      return jsonResponse({ sessionId, userMessage: userMsg, assistantMessage: assistantMsg }, 201, req);
     }
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

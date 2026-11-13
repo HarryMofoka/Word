@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
         .limit(50);
 
       if (error) throw new AppError(500, 'DISPUTES_FETCH_FAILED', error.message);
-      return jsonResponse({ disputes: data ?? [] });
+      return jsonResponse({ disputes: data ?? [] }, 200, req);
     }
 
     if (req.method === 'POST') {
@@ -76,12 +76,12 @@ Deno.serve(async (req: Request) => {
         metadata: { transactionId, reason },
       });
 
-      return jsonResponse({ dispute }, 201);
+      return jsonResponse({ dispute }, 201, req);
     }
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

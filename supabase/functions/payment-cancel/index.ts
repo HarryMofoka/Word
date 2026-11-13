@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
         metadata: { reason },
       });
 
-      return jsonResponse({ transaction: updated });
+      return jsonResponse({ transaction: updated }, 200, req);
     }
 
     if (body.paymentRequestId) {
@@ -90,12 +90,12 @@ Deno.serve(async (req: Request) => {
         metadata: { reason },
       });
 
-      return jsonResponse({ request: updated });
+      return jsonResponse({ request: updated }, 200, req);
     }
 
     throw new AppError(400, 'MISSING_TARGET', 'Provide transactionId or paymentRequestId.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 

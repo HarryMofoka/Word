@@ -44,10 +44,10 @@ Deno.serve(async (req: Request) => {
         if (createErr) {
           throw new AppError(500, 'PROFILE_CREATE_FAILED', createErr.message);
         }
-        return jsonResponse({ profile: created });
+        return jsonResponse({ profile: created }, 200, req);
       }
 
-      return jsonResponse({ profile });
+      return jsonResponse({ profile }, 200, req);
     }
 
     if (req.method === 'PATCH') {
@@ -92,12 +92,12 @@ Deno.serve(async (req: Request) => {
         metadata: { fields: Object.keys(updates) },
       });
 
-      return jsonResponse({ profile: updated });
+      return jsonResponse({ profile: updated }, 200, req);
     }
 
     throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Unsupported HTTP method.');
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 });
 
