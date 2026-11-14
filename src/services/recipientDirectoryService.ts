@@ -26,6 +26,7 @@ export interface RecipientDirectoryEntry {
   firstName: string;
   lastName: string;
   fullName: string;
+  email?: string;
   avatarUrl: string;
   walletAddress: string;
   network: SupportedNetworkName;
@@ -106,7 +107,67 @@ function createAvatarDataUri(
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+export const HARRY_MOFOKA_EMAIL = 'mofokaharry@gmail.com';
+export const HARRY_MOFOKA_PRIMARY_WALLET = '0x3B5082b903A3ddC2A19d9aa660d6dE1715ed415e';
+export const HARRY_MOFOKA_WALLET_ADDRESSES = [
+  '0x3B5082b903A3ddC2A19d9aa660d6dE1715ed415e',
+  '0xb632F4cB141186c05eFDe91634cf9E69935cdA8e',
+  '0x8D57740A68561490f2FE098cFc5DA5a832F55a79',
+  '0xe97bdf026287ef8eef2daa1ee3d9f75921a47f7b',
+  '0x4463b3a2c6d0636426ce00ced15d2598b66a01ef',
+];
+
+export function isHarryMofokaAccount(address?: string, email?: string): boolean {
+  if (email && email.trim().toLowerCase() === HARRY_MOFOKA_EMAIL) return true;
+  if (!address) return false;
+  const lower = address.trim().toLowerCase();
+  return HARRY_MOFOKA_WALLET_ADDRESSES.some((a) => a.toLowerCase() === lower);
+}
+
 export const RECIPIENT_DIRECTORY: RecipientDirectoryEntry[] = [
+  {
+    id: 'rec-harry-mofoka',
+    firstName: 'Harry',
+    lastName: 'Mofoka',
+    fullName: 'Harry Mofoka',
+    email: HARRY_MOFOKA_EMAIL,
+    avatarUrl: createAvatarDataUri('HM', '#064e3b', '#059669', '#6ee7b7'),
+    walletAddress: HARRY_MOFOKA_PRIMARY_WALLET,
+    network: 'Testnet',
+    trustScore: 99,
+    riskTier: 'low',
+    completedTransactions: 36,
+    disputesRaisedCount: 0,
+    verifiedIdentity: true,
+    memberSince: 'Nov 2024',
+    roleOrTag: 'Verified Account (mofokaharry@gmail.com) · Clean Record · 400.00 USDT',
+    trackRecordSummary:
+      'Clean verified track record under mofokaharry@gmail.com (400.00 USDT wallet balance). 36 completed transactions with 0 disputes raised.',
+    pastRecords: [
+      {
+        id: 'tx-hist-harry-1',
+        date: '2026-11-12',
+        amount: '400.00 USDT',
+        purpose: 'Verified profile wallet funding & settlement',
+        outcome: 'Completed',
+      },
+      {
+        id: 'tx-hist-harry-2',
+        date: '2026-10-29',
+        amount: '160.00 USDT',
+        purpose: 'Milestone delivery settlement',
+        outcome: 'Completed',
+      },
+      {
+        id: 'tx-hist-harry-3',
+        date: '2026-10-11',
+        amount: '95.00 USDT',
+        purpose: 'Cross-platform consulting invoice',
+        outcome: 'Completed',
+      },
+    ],
+    disputes: [],
+  },
   {
     id: 'rec-thabo-mokoena',
     firstName: 'Thabo',
@@ -447,6 +508,7 @@ export function searchRecipients(
       entry.firstName.toLowerCase().includes(normalized) ||
       entry.lastName.toLowerCase().includes(normalized) ||
       entry.fullName.toLowerCase().includes(normalized) ||
+      (entry.email && entry.email.toLowerCase().includes(normalized)) ||
       entry.walletAddress.toLowerCase().includes(normalized) ||
       entry.roleOrTag.toLowerCase().includes(normalized)
     );
@@ -462,6 +524,16 @@ export function lookupRecipientByAddressOrQuery(
   const cleaned = input.trim();
   if (!cleaned) return null;
 
+  if (isHarryMofokaAccount(cleaned, cleaned)) {
+    const harryEntry = RECIPIENT_DIRECTORY[0];
+    return {
+      ...harryEntry,
+      walletAddress: /^0x[a-fA-F0-9]{40}$/.test(cleaned)
+        ? cleaned
+        : harryEntry.walletAddress,
+    };
+  }
+
   const exactByAddress = RECIPIENT_DIRECTORY.find(
     (r) => r.walletAddress.toLowerCase() === cleaned.toLowerCase()
   );
@@ -471,7 +543,8 @@ export function lookupRecipientByAddressOrQuery(
     (r) =>
       r.fullName.toLowerCase() === cleaned.toLowerCase() ||
       r.firstName.toLowerCase() === cleaned.toLowerCase() ||
-      r.lastName.toLowerCase() === cleaned.toLowerCase()
+      r.lastName.toLowerCase() === cleaned.toLowerCase() ||
+      (r.email && r.email.toLowerCase() === cleaned.toLowerCase())
   );
   if (byName) return byName;
 
@@ -695,7 +768,8 @@ export function createSimulatedProfileWallet(params: {
   initialUsdt?: number;
 }): SimulatedProfileWallet {
   const network = params.network ?? DEFAULT_DEMO_NETWORK;
-  const initialUsdt = params.initialUsdt ?? 2500.0;
+  const isHarry = isHarryMofokaAccount(undefined, params.email);
+  const initialUsdt = params.initialUsdt ?? (isHarry ? 400.0 : 2500.0);
   const initialNative = 1.5;
 
   const randomWallet = Wallet.createRandom();
@@ -703,14 +777,14 @@ export function createSimulatedProfileWallet(params: {
     randomWallet.mnemonic?.phrase ??
     'abandon ability able about above absent absorb abstract absurd abuse access accident';
   const seedWords = phrase.split(' ');
-  const address = randomWallet.address;
+  const address = isHarry ? HARRY_MOFOKA_PRIMARY_WALLET : randomWallet.address;
   const createdAt = new Date().toISOString();
 
   const record = {
     usdtBalance: initialUsdt,
     nativeBalance: initialNative,
-    linkedProfileName: params.displayName || 'Word Account Owner',
-    linkedProfileEmail: params.email || 'owner@word.fi',
+    linkedProfileName: params.displayName || (isHarry ? 'Harry Mofoka' : 'Word Account Owner'),
+    linkedProfileEmail: params.email || (isHarry ? HARRY_MOFOKA_EMAIL : 'owner@word.fi'),
     createdAt,
   };
 
@@ -743,11 +817,23 @@ export function ensureSimulatedWalletBalance(
   linkedProfileEmail: string;
 } {
   const key = address.toLowerCase();
+  const isHarry = isHarryMofokaAccount(address, profile?.email);
+  const defaultUsdt = isHarry ? 400.0 : 2500.0;
   const map = readStoredWalletMap();
   const existing = memoryWalletBalances.get(key) ?? map[key];
 
   if (existing) {
-    memoryWalletBalances.set(key, existing);
+    // If Harry's account previously had the generic 2500.0 default cached, normalize it to 400.00 USDT
+    if (isHarry && existing.usdtBalance === 2500.0) {
+      existing.usdtBalance = 400.0;
+      existing.linkedProfileName = profile?.displayName || 'Harry Mofoka';
+      existing.linkedProfileEmail = HARRY_MOFOKA_EMAIL;
+      memoryWalletBalances.set(key, existing);
+      map[key] = existing;
+      writeStoredWalletMap(map);
+    } else {
+      memoryWalletBalances.set(key, existing);
+    }
     return {
       usdtBalance: existing.usdtBalance.toFixed(2),
       nativeBalance: existing.nativeBalance.toFixed(4),
@@ -757,10 +843,10 @@ export function ensureSimulatedWalletBalance(
   }
 
   const seeded = {
-    usdtBalance: 2500.0,
+    usdtBalance: defaultUsdt,
     nativeBalance: 1.5,
-    linkedProfileName: profile?.displayName || 'Word Account Owner',
-    linkedProfileEmail: profile?.email || 'owner@word.fi',
+    linkedProfileName: profile?.displayName || (isHarry ? 'Harry Mofoka' : 'Word Account Owner'),
+    linkedProfileEmail: profile?.email || (isHarry ? HARRY_MOFOKA_EMAIL : 'owner@word.fi'),
     createdAt: new Date().toISOString(),
   };
   memoryWalletBalances.set(key, seeded);

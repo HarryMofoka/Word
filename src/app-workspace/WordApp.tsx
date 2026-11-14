@@ -367,7 +367,6 @@ export const WordApp: React.FC<WordAppProps> = ({
       displayName: session.displayName,
       email: session.email,
       network: wallet?.network ?? 'Testnet',
-      initialUsdt: 2500.0,
     });
     const candidate: WalletState = {
       address: sim.address,
@@ -383,8 +382,8 @@ export const WordApp: React.FC<WordAppProps> = ({
     updateWallet(persisted);
     await refreshBalances(persisted);
     pushLiveNotification({
-      title: 'Profile-Linked Wallet Created (2,500.00 USDT)',
-      detail: `New wallet ${sim.address.slice(0, 8)}...${sim.address.slice(-4)} linked to ${session.displayName} (${session.email}) and funded with 2,500.00 USDT.`,
+      title: `Profile-Linked Wallet Ready (${sim.initialUsdtBalance} USDT)`,
+      detail: `Wallet ${sim.address.slice(0, 8)}...${sim.address.slice(-4)} linked to ${session.displayName} (${session.email}) with ${sim.initialUsdtBalance} USDT and a clean track record.`,
       category: 'Security',
     });
   };

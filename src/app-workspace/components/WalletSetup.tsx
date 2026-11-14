@@ -35,7 +35,6 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
         displayName: session?.displayName || 'Word Account Owner',
         email: session?.email || 'owner@word.fi',
         network: 'Testnet',
-        initialUsdt: 2500.0,
       });
       onConnectWallet({
         address: sim.address,
@@ -65,7 +64,6 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
         displayName: session?.displayName || 'Word Account Owner',
         email: session?.email || 'owner@word.fi',
         network: created.network,
-        initialUsdt: 2500.0,
       });
       onCreateWallet({
         address: created.address,

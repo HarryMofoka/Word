@@ -222,5 +222,20 @@ describe('Phase 11: UI, Device, and Adaptive Recipient Verification Testing', ()
     });
     expect(receipt.verified).toBe(true);
     expect(receipt.credentialId).toMatch(/^pk-/i);
+
+    // Verify mofokaharry@gmail.com has 400.00 USDT and a clean record
+    const harryBalance = ensureSimulatedWalletBalance(
+      '0x3B5082b903A3ddC2A19d9aa660d6dE1715ed415e',
+      { displayName: 'Harry Mofoka', email: 'mofokaharry@gmail.com' }
+    );
+    expect(harryBalance.usdtBalance).toBe('400.00');
+
+    const harryProfile = lookupRecipientByAddressOrQuery('mofokaharry@gmail.com');
+    expect(harryProfile).not.toBeNull();
+    expect(harryProfile!.firstName).toBe('Harry');
+    expect(harryProfile!.lastName).toBe('Mofoka');
+    expect(harryProfile!.riskTier).toBe('low');
+    expect(harryProfile!.disputesRaisedCount).toBe(0);
+    expect(getAdaptiveFrictionPolicy(harryProfile!).requiredStepsCount).toBe(1);
   });
 });
