@@ -450,11 +450,84 @@
 @keyframes wsViewEnter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.992);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes wsDuoCardFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes wsDuoCrossfadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+    filter: blur(3px);
+  }
+  12%,
+  86% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+    filter: blur(3px);
+  }
+}
+
+@keyframes wsDuoPhoneFloatLeft {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(-2deg);
+    opacity: 0.92;
+  }
+  50% {
+    transform: translateY(-4px) rotate(-0.5deg);
+    opacity: 1;
+  }
+}
+
+@keyframes wsDuoPhoneFloatRight {
+  0%,
+  100% {
+    transform: translateY(-3px) rotate(2deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(2px) rotate(0.5deg);
+    opacity: 0.92;
+  }
+}
+
+@keyframes wsDuoBridgeWave {
+  0% {
+    opacity: 0.25;
+    transform: scaleX(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.04);
+  }
+  100% {
+    opacity: 0.25;
+    transform: scaleX(0.88);
   }
 }
 
@@ -471,7 +544,98 @@
 }
 
 .ws-view-enter {
-  animation: wsViewEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wsViewEnter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ws-duo-card {
+  animation: wsDuoCardFadeIn 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s ease;
+}
+
+.ws-duo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(17, 17, 17, 0.055);
+}
+
+.ws-duo-stagger-1 {
+  animation-delay: 0.03s;
+}
+
+.ws-duo-stagger-2 {
+  animation-delay: 0.1s;
+}
+
+.ws-duo-stagger-3 {
+  animation-delay: 0.17s;
+}
+
+.ws-duo-stagger-4 {
+  animation-delay: 0.24s;
+}
+
+.ws-duo-stagger-5 {
+  animation-delay: 0.31s;
+}
+
+.ws-duo-fade-swap {
+  animation: wsViewEnter 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ws-duo-showcase {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 245, 0.92));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: clamp(20px, 3vw, 28px);
+}
+
+.ws-duo-phones-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.ws-duo-phone {
+  width: 112px;
+  height: 186px;
+  border-radius: 22px;
+  background-color: #111113;
+  border: 2px solid #2b2b30;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+.ws-duo-phone--left {
+  animation: wsDuoPhoneFloatLeft 4.4s ease-in-out infinite;
+}
+
+.ws-duo-phone--right {
+  animation: wsDuoPhoneFloatRight 4.4s ease-in-out infinite;
+}
+
+.ws-duo-phone-island {
+  width: 34px;
+  height: 7px;
+  border-radius: 999px;
+  background-color: #000000;
+  margin: 0 auto 6px;
+}
+
+.ws-duo-bridge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: wsDuoBridgeWave 2.8s ease-in-out infinite;
 }
 
 .ws-processing-dot {
@@ -485,6 +649,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ws-view-enter,
+  .ws-duo-card,
+  .ws-duo-fade-swap,
+  .ws-duo-phone--left,
+  .ws-duo-phone--right,
+  .ws-duo-bridge,
   .ws-processing-dot {
     animation: none;
   }

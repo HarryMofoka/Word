@@ -5,6 +5,12 @@ import dashboardViewSource from '../../src/app-workspace/components/DashboardVie
 import accountabilityHubSource from '../../src/app-workspace/components/accountability/AccountabilityHub.tsx?raw';
 import settingsViewSource from '../../src/app-workspace/components/SettingsView.tsx?raw';
 import paymentPayFlowSource from '../../src/app-workspace/components/payments/PaymentPayFlow.tsx?raw';
+import mobilePkgRaw from '../../mobile/package.json?raw';
+import mobileAppJsonRaw from '../../mobile/app.json?raw';
+import mobileDuoAnimRaw from '../../mobile/src/components/DuoAnimations.tsx?raw';
+import mobileAppTsxRaw from '../../mobile/App.tsx?raw';
+import mobileAuthScreenRaw from '../../mobile/src/screens/AuthScreen.tsx?raw';
+import mobilePaymentsScreenRaw from '../../mobile/src/screens/PaymentsAndMutualTrustScreen.tsx?raw';
 import { callEdgeFunction } from '../../src/services/apiClient';
 import { supabase } from '../../src/lib/supabase';
 import { checkOnDeviceAiCompatibility } from '../../src/services/qvacAssistantService';
@@ -136,5 +142,29 @@ describe('Phase 11: UI and Device Testing', () => {
     });
     expect(lowRamMobile.supportedForLlm).toBe(false);
     expect(lowRamMobile.runtime).toBe('local-deterministic');
+  });
+
+  it('11. implements the iPhone Duo Fade-In / Fade-Out animation on the Web Dashboard and in the Expo 58 React Native mobile app', () => {
+    // Web Dashboard Duo Fade-In / Fade-Out animations
+    expect(dashboardViewSource).toContain('DUO_TRUST_STAGES');
+    expect(dashboardViewSource).toContain('IPHONE DUO · BILATERAL MUTUAL TRUST');
+    expect(dashboardViewSource).toContain('ws-duo-showcase');
+    expect(dashboardViewSource).toContain('ws-duo-fade-swap');
+    expect(workspaceCssRaw).toContain('@keyframes wsDuoCardFadeIn');
+    expect(workspaceCssRaw).toContain('@keyframes wsDuoPhoneFloatLeft');
+    expect(workspaceCssRaw).toContain('@keyframes wsDuoPhoneFloatRight');
+
+    // Expo 58 React Native Mobile App parity
+    const mobilePkg = JSON.parse(mobilePkgRaw);
+    const mobileAppJson = JSON.parse(mobileAppJsonRaw);
+
+    expect(mobilePkg.dependencies.expo).toContain('58.0.0');
+    expect(mobilePkg.dependencies['react-native']).toBeDefined();
+    expect(mobileAppJson.expo.sdkVersion).toBe('58.0.0');
+    expect(mobileDuoAnimRaw).toContain('DuoFadeView');
+    expect(mobileDuoAnimRaw).toContain('IPhoneDuoShowcase');
+    expect(mobileAppTsxRaw).toContain('PaymentsAndMutualTrustScreen');
+    expect(mobileAuthScreenRaw).toContain('Owner Face Scan');
+    expect(mobilePaymentsScreenRaw).toContain('BILATERAL MUTUAL TRUST VERIFICATION');
   });
 });

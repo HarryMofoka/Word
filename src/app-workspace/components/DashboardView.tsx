@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowDownLeft,
+  ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   EyeOff,
   FileText,
   ShieldCheck,
+  Smartphone,
 } from 'lucide-react';
 import type {
   AppNotification,
@@ -19,6 +21,45 @@ import type {
 } from '../types';
 import type { WalletBalances } from '../../services/wdkWalletService';
 import type { HydratedMutualSession } from '../../services/mutualTrustService';
+
+const DUO_TRUST_STAGES = [
+  {
+    id: 'face-scan',
+    step: '01 · OWNER LIVENESS',
+    title: 'Independent Facial Liveness',
+    desc: 'Sender & Recipient complete POPIA-compliant facial liveness checks on their own devices.',
+    leftLabel: 'Sender · Liveness ✓',
+    rightLabel: 'Recipient · Liveness ✓',
+    bridgeBadge: 'Biometric Attested',
+  },
+  {
+    id: 'report-exchange',
+    step: '02 · BILATERAL EXCHANGE',
+    title: 'Mutual Report Exchange',
+    desc: 'Structured verification reports exchange automatically — zero raw biometric media ever shared.',
+    leftLabel: 'Views Recipient Report',
+    rightLabel: 'Views Sender Report',
+    bridgeBadge: 'Reports Exchanged',
+  },
+  {
+    id: 'eip712-cosign',
+    step: '03 · DUAL AUTHORISATION',
+    title: 'EIP-712 Co-Signed Approval',
+    desc: 'Both wallets cryptographically sign the identical canonical transaction hash before execution.',
+    leftLabel: 'Sender EIP-712 Sig ✓',
+    rightLabel: 'Recipient EIP-712 Sig ✓',
+    bridgeBadge: 'Dual-Party Locked',
+  },
+  {
+    id: 'settlement',
+    step: '04 · ON-CHAIN RECEIPT',
+    title: 'Verified Settlement & Receipt',
+    desc: 'Backend execution gate unlocks on-chain transfer and mints a permanent Mutual Trust Receipt.',
+    leftLabel: 'Sent · Receipt Issued',
+    rightLabel: 'Received · Verified',
+    bridgeBadge: 'Settled On-Chain',
+  },
+];
 
 interface DashboardViewProps {
   session: UserSession;
@@ -53,6 +94,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectRecord,
   onOpenSecurity,
 }) => {
+  const [duoStageIdx, setDuoStageIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDuoStageIdx((prev) => (prev + 1) % DUO_TRUST_STAGES.length);
+    }, 3600);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeDuoStage = DUO_TRUST_STAGES[duoStageIdx];
   const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
   const unreadNotifs = notifications.filter((n) => !n.read);
   const openMutualSessions = mutualSessions.filter((m) =>
@@ -65,7 +116,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Top Row: Available Balance + Wallet Overview */}
       <div className="ws-grid">
-        <div className="ws-card ws-balance-card">
+        <div className="ws-card ws-balance-card ws-duo-card ws-duo-stagger-1">
           <div className="ws-balance-accent" aria-hidden="true" />
           <div
             style={{
@@ -87,20 +138,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
-          <p className="ws-balance-amount">
-            {balanceHidden
-              ? '•••••• USDT'
-              : balancesLoading && !balances
-                ? 'Loading USDT...'
-                : `${balances?.usdtBalance ?? '0.00'} USDT`}
-          </p>
-          <p className="body-sm" style={{ marginTop: '8px' }}>
-            {balances?.networkLabel ?? wallet.network} ·{' '}
-            {balanceHidden
-              ? '••••'
-              : `${balances?.nativeBalance ?? '0.00'} ${balances?.nativeSymbol ?? 'ETH'}`}{' '}
-            · Welcome back, {session.displayName}
-          </p>
+          <div key={String(balanceHidden)} className="ws-duo-fade-swap">
+            <p className="ws-balance-amount">
+              {balanceHidden
+                ? '•••••• USDT'
+                : balancesLoading && !balances
+                  ? 'Loading USDT...'
+                  : `${balances?.usdtBalance ?? '0.00'} USDT`}
+            </p>
+            <p className="body-sm" style={{ marginTop: '8px' }}>
+              {balances?.networkLabel ?? wallet.network} ·{' '}
+              {balanceHidden
+                ? '••••'
+                : `${balances?.nativeBalance ?? '0.00'} ${balances?.nativeSymbol ?? 'ETH'}`}{' '}
+              · Welcome back, {session.displayName}
+            </p>
+          </div>
 
           {/* Quick Actions connected to real flows */}
           <div className="ws-quick-actions" aria-label="Quick actions">
@@ -143,7 +196,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Wallet Overview Summary */}
-        <div className="ws-card">
+        <div className="ws-card ws-duo-card ws-duo-stagger-2">
           <div
             style={{
               display: 'flex',
@@ -217,9 +270,158 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* iPhone Duo Fade-In / Fade-Out Bilateral Trust Showcase */}
+      <div className="ws-duo-showcase ws-duo-card ws-duo-stagger-3">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '22px',
+            alignItems: 'center',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '8px',
+              }}
+            >
+              <Smartphone size={14} style={{ color: 'var(--ink)' }} />
+              <p className="eyebrow" style={{ margin: 0 }}>
+                IPHONE DUO · BILATERAL MUTUAL TRUST
+              </p>
+            </div>
+
+            <div key={activeDuoStage.id} className="ws-duo-fade-swap">
+              <p
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  color: '#15803d',
+                  marginBottom: '4px',
+                }}
+              >
+                {activeDuoStage.step}
+              </p>
+              <h2 className="heading-sm" style={{ marginBottom: '6px' }}>
+                {activeDuoStage.title}
+              </h2>
+              <p className="body-sm" style={{ marginBottom: '14px', maxWidth: '480px' }}>
+                {activeDuoStage.desc}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {DUO_TRUST_STAGES.map((stage, idx) => (
+                <button
+                  key={stage.id}
+                  type="button"
+                  onClick={() => setDuoStageIdx(idx)}
+                  style={{
+                    height: '6px',
+                    width: idx === duoStageIdx ? '28px' : '12px',
+                    borderRadius: '999px',
+                    border: 'none',
+                    backgroundColor: idx === duoStageIdx ? 'var(--ink)' : 'var(--line)',
+                    transition: 'width 0.3s ease, background-color 0.3s ease',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  aria-label={`Show stage ${stage.title}`}
+                />
+              ))}
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                style={{ marginLeft: '8px' }}
+                onClick={() => onOpenPaymentMode('mutual-trust')}
+              >
+                Launch Mutual Trust <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+
+          {/* Synchronized iPhone Duo Fade-In / Fade-Out Pair */}
+          <div className="ws-duo-phones-stage" aria-hidden="true">
+            <div className="ws-duo-phone ws-duo-phone--left">
+              <div>
+                <div className="ws-duo-phone-island" />
+                <p style={{ fontSize: '9px', color: '#9ca3af', letterSpacing: '0.06em' }}>
+                  DEVICE A · SENDER
+                </p>
+              </div>
+              <div
+                key={`left-${activeDuoStage.id}`}
+                className="ws-duo-fade-swap"
+                style={{
+                  padding: '8px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                }}
+              >
+                <ShieldCheck size={14} style={{ color: '#4ade80', marginBottom: '4px' }} />
+                <p style={{ fontSize: '10px', fontWeight: 600, lineHeight: 1.3 }}>
+                  {activeDuoStage.leftLabel}
+                </p>
+              </div>
+              <p style={{ fontSize: '9px', color: '#a1a1aa' }}>{shortAddr}</p>
+            </div>
+
+            <div className="ws-duo-bridge">
+              <ArrowLeftRight size={16} style={{ color: '#16a34a' }} />
+              <span
+                key={`bridge-${activeDuoStage.id}`}
+                className="ws-duo-fade-swap"
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  padding: '3px 8px',
+                  borderRadius: '999px',
+                  backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                  color: '#15803d',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {activeDuoStage.bridgeBadge}
+              </span>
+            </div>
+
+            <div className="ws-duo-phone ws-duo-phone--right">
+              <div>
+                <div className="ws-duo-phone-island" />
+                <p style={{ fontSize: '9px', color: '#9ca3af', letterSpacing: '0.06em' }}>
+                  DEVICE B · RECIPIENT
+                </p>
+              </div>
+              <div
+                key={`right-${activeDuoStage.id}`}
+                className="ws-duo-fade-swap"
+                style={{
+                  padding: '8px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                }}
+              >
+                <CheckCircle2 size={14} style={{ color: '#4ade80', marginBottom: '4px' }} />
+                <p style={{ fontSize: '10px', fontWeight: 600, lineHeight: 1.3 }}>
+                  {activeDuoStage.rightLabel}
+                </p>
+              </div>
+              <p style={{ fontSize: '9px', color: '#a1a1aa' }}>Verified Counterparty</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Pending Mutual Trust Invitations & Bilateral Sessions */}
       {openMutualSessions.length > 0 && (
-        <div className="ws-card">
+        <div className="ws-card ws-duo-card ws-duo-stagger-3">
           <div
             style={{
               display: 'flex',
@@ -272,7 +474,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Bottom Row: Recent Transactions + Notifications Preview */}
       <div className="ws-grid">
-        <div className="ws-card">
+        <div className="ws-card ws-duo-card ws-duo-stagger-4">
           <div
             style={{
               display: 'flex',
@@ -342,7 +544,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ))}
         </div>
 
-        <div className="ws-card">
+        <div className="ws-card ws-duo-card ws-duo-stagger-5">
           <div
             style={{
               display: 'flex',

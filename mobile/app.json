@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Word",
+    "slug": "word-mobile",
+    "version": "1.0.0",
+    "sdkVersion": "58.0.0",
+    "orientation": "portrait",
+    "scheme": "word",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F7F5",
+    "primaryColor": "#0D0D0D",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "finance.word.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Word uses the camera for POPIA-compliant Owner Facial Liveness Verification and scanning payment QR codes.",
+        "NSFaceIDUsageDescription": "Word uses Face ID to protect your self-custodial wallet and bilateral Mutual Trust approvals."
+      }
+    },
+    "android": {
+      "package": "finance.word.mobile",
+      "permissions": [
+        "CAMERA",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Word to access your camera for Owner Facial Liveness Verification and QR payment scanning."
+        }
+      ],
+      "expo-secure-store",
+      "expo-local-authentication"
+    ]
+  }
+}
+
