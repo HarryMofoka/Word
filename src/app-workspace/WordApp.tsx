@@ -512,9 +512,13 @@ export const WordApp: React.FC<WordAppProps> = ({
                   className="ws-card ws-duo-fade-swap"
                   style={{
                     padding: '14px 16px',
-                    boxShadow: '0 14px 32px rgba(0, 0, 0, 0.14)',
+                    boxShadow: '0 16px 36px rgba(17, 17, 17, 0.22)',
                     border: '1.5px solid var(--ink)',
-                    backgroundColor: 'var(--surface)',
+                    backgroundColor: '#ffffff',
+                    background: '#ffffff',
+                    opacity: 1,
+                    backdropFilter: 'none',
+                    WebkitBackdropFilter: 'none',
                   }}
                 >
                   <div

@@ -246,14 +246,16 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     return () => window.clearInterval(timer);
   }, [step, waitStarted, waitRemainingSeconds]);
 
-  // Automatically start the extra wait timer as soon as preceding steps are completed
+  // Automatically start the extra wait timer for moderate-risk flows that do not require a passkey.
+  // When passkey verification IS required, the 8-second countdown begins immediately upon authenticating the passkey.
   useEffect(() => {
     if (step !== 'recipient_friction') return;
+    if (frictionPolicy.requiresPasskeyVerification) return;
+
     const preWaitDone =
       identityConfirmed &&
       (!frictionPolicy.requiresDisputeWalkthrough || disputesWalkedThrough) &&
-      (!frictionPolicy.requiresAreYouSurePrompt || areYouSureConfirmed) &&
-      (!frictionPolicy.requiresPasskeyVerification || Boolean(passkeyReceipt));
+      (!frictionPolicy.requiresAreYouSurePrompt || areYouSureConfirmed);
 
     if (preWaitDone && frictionPolicy.extraWaitSeconds > 0 && !waitStarted) {
       setWaitStarted(true);
@@ -268,7 +270,6 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     identityConfirmed,
     disputesWalkedThrough,
     areYouSureConfirmed,
-    passkeyReceipt,
     frictionPolicy,
     waitStarted,
     sendAmount,
@@ -1175,13 +1176,15 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           userEmail,
         });
         setPasskeyReceipt(receipt);
+        setWaitRemainingSeconds(8);
+        setWaitStarted(true);
         onPushLiveNotification?.({
-          title: 'Sender Passkey Verified',
+          title: 'Passkey Verified · 8s Cooling-Off Countdown Started',
           detail: `Identity confirmed via ${
             receipt.method === 'webauthn-biometric'
               ? 'Biometric WebAuthn Passkey'
               : 'Word Security Passkey'
-          } (${receipt.credentialId}).`,
+          } (${receipt.credentialId}). Mandatory 8-second countdown is now running.`,
           category: 'Security',
         });
       } catch (err) {
@@ -1659,7 +1662,9 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
               {waitRemainingSeconds > 0
                 ? waitStarted
                   ? `Please wait ${waitRemainingSeconds} more second(s) before the Send Stablecoin button unlocks. You can cancel at any time if you change your mind.`
-                  : 'Complete the verification steps above to start the mandatory cooling-off countdown.'
+                  : frictionPolicy.requiresPasskeyVerification
+                    ? 'Authenticate your Passkey in Step 4 above to start the 8-second cooling-off countdown.'
+                    : 'Complete the verification steps above to start the mandatory cooling-off countdown.'
                 : 'The mandatory cooling-off wait has elapsed. You may now send the stablecoin transfer if you still wish to proceed.'}
             </p>
             <div

@@ -662,7 +662,7 @@ export function getAdaptiveFrictionPolicy(
     recipient.trustScore < 45 ||
     recipient.disputesRaisedCount >= 2
   ) {
-    const waitSeconds = recipient.riskTier === 'critical' ? 10 : 8;
+    const waitSeconds = 8;
     return {
       frictionLevel: 'maximum',
       riskTier: recipient.riskTier,

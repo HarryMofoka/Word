@@ -420,3 +420,4 @@ npm run build
 ### Backend Deployment (Supabase)
 - **Database Migrations:** Applied to project `jbfefrxzawzbeixjbtmo` via `supabase/migrations/`.
 - **Edge Functions:** Deployed via the Supabase MCP / CLI (`identity-verification`, `mutual-trust`, `payment-prepare`, `receipt-verify`, `payment-agreements`, `wallet-challenge`, `payment-requests`, `recipient-verify`, `risk-assess`, `transactions`, `disputes`, `notifications`, `profile`, `qvac-evaluate`).
+
