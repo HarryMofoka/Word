@@ -178,8 +178,17 @@ describe('Phase 11: UI, Device, and Adaptive Recipient Verification Testing', ()
     const ensured = ensureSimulatedWalletBalance(sim.address);
     expect(ensured.usdtBalance).toBe('2500.00');
 
-    const afterSend = deductSimulatedUsdtBalance(sim.address, 125.0);
+    const recipientAddress = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+    const recipientBefore = ensureSimulatedWalletBalance(recipientAddress);
+    const afterSend = deductSimulatedUsdtBalance(sim.address, 125.0, recipientAddress);
     expect(afterSend.usdtBalance).toBe('2375.00');
+    expect(afterSend.recipientUsdtBalance).toBe(
+      (Number(recipientBefore.usdtBalance) + 125.0).toFixed(2)
+    );
+    const recipientAfter = ensureSimulatedWalletBalance(recipientAddress);
+    expect(recipientAfter.usdtBalance).toBe(
+      (Number(recipientBefore.usdtBalance) + 125.0).toFixed(2)
+    );
   });
 
   it('13. searches recipients and displays receiver Name, Surname, Profile Image, and Adaptive Friction steps based on track record', async () => {

@@ -1,5 +1,6 @@
 import { Wallet } from 'ethers';
 import { DEFAULT_DEMO_NETWORK, type SupportedNetworkName } from '../config/blockchain';
+import { supabase } from '../lib/supabase';
 
 export type RecipientRiskTier = 'low' | 'moderate' | 'high' | 'critical';
 
@@ -163,6 +164,64 @@ export const RECIPIENT_DIRECTORY: RecipientDirectoryEntry[] = [
         date: '2026-10-11',
         amount: '95.00 USDT',
         purpose: 'Cross-platform consulting invoice',
+        outcome: 'Completed',
+      },
+    ],
+    disputes: [],
+  },
+  {
+    id: 'rec-hk-mofoka',
+    firstName: 'MR HK',
+    lastName: 'MOFOKA',
+    fullName: 'MR HK MOFOKA',
+    email: 'mofokaharry49@gmail.com',
+    avatarUrl: createAvatarDataUri('HM', '#1e3a8a', '#2563eb', '#93c5fd'),
+    walletAddress: '0x740047b099e8df9d3e4c4ba175b0220be11eb7ac',
+    network: 'Testnet',
+    trustScore: 97,
+    riskTier: 'low',
+    completedTransactions: 22,
+    disputesRaisedCount: 0,
+    verifiedIdentity: true,
+    memberSince: 'Dec 2024',
+    roleOrTag: 'Verified Account (mofokaharry49@gmail.com) · Clean Record',
+    trackRecordSummary:
+      'Verified Word account holder under mofokaharry49@gmail.com with 22 completed transfers and 0 disputes.',
+    pastRecords: [
+      {
+        id: 'tx-hist-hk-1',
+        date: '2026-11-10',
+        amount: '250.00 USDT',
+        purpose: 'Peer settlement',
+        outcome: 'Completed',
+      },
+    ],
+    disputes: [],
+  },
+  {
+    id: 'rec-tshego',
+    firstName: 'Tshego',
+    lastName: 'Mokoena',
+    fullName: 'Tshego Mokoena',
+    email: 'tshego300@gmail.com',
+    avatarUrl: createAvatarDataUri('TM', '#312e81', '#4f46e5', '#a5b4fc'),
+    walletAddress: '0xE2FaDE3342B615461Af2688aB5c3671a5DaC33B4',
+    network: 'Testnet',
+    trustScore: 95,
+    riskTier: 'low',
+    completedTransactions: 18,
+    disputesRaisedCount: 0,
+    verifiedIdentity: true,
+    memberSince: 'Jan 2025',
+    roleOrTag: 'Verified Account (tshego300@gmail.com) · Clean Record',
+    trackRecordSummary:
+      'Verified Word account holder under tshego300@gmail.com with 18 completed transfers and 0 disputes.',
+    pastRecords: [
+      {
+        id: 'tx-hist-tshego-1',
+        date: '2026-11-08',
+        amount: '180.00 USDT',
+        purpose: 'Equipment settlement',
         outcome: 'Completed',
       },
     ],
@@ -823,17 +882,7 @@ export function ensureSimulatedWalletBalance(
   const existing = memoryWalletBalances.get(key) ?? map[key];
 
   if (existing) {
-    // If Harry's account previously had the generic 2500.0 default cached, normalize it to 400.00 USDT
-    if (isHarry && existing.usdtBalance === 2500.0) {
-      existing.usdtBalance = 400.0;
-      existing.linkedProfileName = profile?.displayName || 'Harry Mofoka';
-      existing.linkedProfileEmail = HARRY_MOFOKA_EMAIL;
-      memoryWalletBalances.set(key, existing);
-      map[key] = existing;
-      writeStoredWalletMap(map);
-    } else {
-      memoryWalletBalances.set(key, existing);
-    }
+    memoryWalletBalances.set(key, existing);
     return {
       usdtBalance: existing.usdtBalance.toFixed(2),
       nativeBalance: existing.nativeBalance.toFixed(4),
@@ -863,33 +912,273 @@ export function ensureSimulatedWalletBalance(
 
 export function deductSimulatedUsdtBalance(
   address: string,
-  amountUsdt: number
+  amountUsdt: number,
+  recipientAddress?: string
 ): {
   usdtBalance: string;
   nativeBalance: string;
+  recipientUsdtBalance?: string;
 } {
-  const key = address.toLowerCase();
-  const current = ensureSimulatedWalletBalance(address);
-  const nextUsdt = Math.max(0, Number(current.usdtBalance) - (Number.isFinite(amountUsdt) ? amountUsdt : 0));
-  const nextNative = Math.max(0.01, Number(current.nativeBalance) - 0.0004);
+  const delta = Number.isFinite(amountUsdt) ? Math.max(0, amountUsdt) : 0;
+  const senderKey = address.toLowerCase();
+  const currentSender = ensureSimulatedWalletBalance(address);
+  const nextSenderUsdt = Math.max(0, Number(currentSender.usdtBalance) - delta);
+  const nextSenderNative = Math.max(0.01, Number(currentSender.nativeBalance) - 0.0004);
 
-  const updated = {
-    usdtBalance: nextUsdt,
-    nativeBalance: nextNative,
-    linkedProfileName: current.linkedProfileName,
-    linkedProfileEmail: current.linkedProfileEmail,
+  const updatedSender = {
+    usdtBalance: nextSenderUsdt,
+    nativeBalance: nextSenderNative,
+    linkedProfileName: currentSender.linkedProfileName,
+    linkedProfileEmail: currentSender.linkedProfileEmail,
     createdAt: new Date().toISOString(),
   };
 
-  memoryWalletBalances.set(key, updated);
   const map = readStoredWalletMap();
-  map[key] = updated;
+  memoryWalletBalances.set(senderKey, updatedSender);
+  map[senderKey] = updatedSender;
+
+  if (isHarryMofokaAccount(address, currentSender.linkedProfileEmail)) {
+    for (const harryAddr of HARRY_MOFOKA_WALLET_ADDRESSES) {
+      const hKey = harryAddr.toLowerCase();
+      memoryWalletBalances.set(hKey, updatedSender);
+      map[hKey] = updatedSender;
+    }
+  }
+
+  let recipientUsdtBalance: string | undefined;
+
+  if (recipientAddress && recipientAddress.trim()) {
+    const recipientKey = recipientAddress.trim().toLowerCase();
+    const matchedEntry = lookupRecipientByAddressOrQuery(recipientAddress.trim());
+    const currentRecipient = ensureSimulatedWalletBalance(recipientAddress.trim(), {
+      displayName: matchedEntry?.fullName,
+      email: matchedEntry?.email,
+    });
+    const nextRecipientUsdt = Number(currentRecipient.usdtBalance) + delta;
+
+    const updatedRecipient = {
+      usdtBalance: nextRecipientUsdt,
+      nativeBalance: Number(currentRecipient.nativeBalance),
+      linkedProfileName: matchedEntry?.fullName || currentRecipient.linkedProfileName,
+      linkedProfileEmail: matchedEntry?.email || currentRecipient.linkedProfileEmail,
+      createdAt: new Date().toISOString(),
+    };
+
+    memoryWalletBalances.set(recipientKey, updatedRecipient);
+    map[recipientKey] = updatedRecipient;
+
+    if (isHarryMofokaAccount(recipientAddress.trim(), matchedEntry?.email)) {
+      for (const harryAddr of HARRY_MOFOKA_WALLET_ADDRESSES) {
+        const hKey = harryAddr.toLowerCase();
+        memoryWalletBalances.set(hKey, updatedRecipient);
+        map[hKey] = updatedRecipient;
+      }
+    }
+
+    recipientUsdtBalance = nextRecipientUsdt.toFixed(2);
+  }
+
   writeStoredWalletMap(map);
 
   return {
-    usdtBalance: nextUsdt.toFixed(2),
-    nativeBalance: nextNative.toFixed(4),
+    usdtBalance: nextSenderUsdt.toFixed(2),
+    nativeBalance: nextSenderNative.toFixed(4),
+    recipientUsdtBalance,
   };
+}
+
+export async function executeCrossAccountUsdtTransfer(params: {
+  senderAddress: string;
+  recipientAddress: string;
+  recipientName: string;
+  amountUsdt: number;
+  purpose: string;
+  network: string;
+  txHash: string;
+}): Promise<{
+  senderNewBalance: string;
+  recipientNewBalance?: string;
+  txHash: string;
+}> {
+  const localResult = deductSimulatedUsdtBalance(
+    params.senderAddress,
+    params.amountUsdt,
+    params.recipientAddress
+  );
+
+  try {
+    const { data, error } = await (supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{
+      data: {
+        sender_new_balance?: string | null;
+        recipient_new_balance?: string | null;
+        tx_hash?: string | null;
+      } | null;
+      error: unknown;
+    }>)('execute_simulated_usdt_transfer', {
+      p_sender_address: params.senderAddress,
+      p_recipient_address: params.recipientAddress,
+      p_recipient_name: params.recipientName,
+      p_amount: params.amountUsdt,
+      p_purpose: params.purpose,
+      p_network: params.network,
+      p_tx_hash: params.txHash,
+    });
+
+    if (!error && data) {
+      const map = readStoredWalletMap();
+      if (data.sender_new_balance) {
+        const sKey = params.senderAddress.toLowerCase();
+        const existingSender = memoryWalletBalances.get(sKey) ?? map[sKey];
+        if (existingSender) {
+          existingSender.usdtBalance = Number(data.sender_new_balance);
+          memoryWalletBalances.set(sKey, existingSender);
+          map[sKey] = existingSender;
+        }
+      }
+      if (data.recipient_new_balance) {
+        const rKey = params.recipientAddress.toLowerCase();
+        const existingRecipient = memoryWalletBalances.get(rKey) ?? map[rKey];
+        if (existingRecipient) {
+          existingRecipient.usdtBalance = Number(data.recipient_new_balance);
+          memoryWalletBalances.set(rKey, existingRecipient);
+          map[rKey] = existingRecipient;
+        }
+      }
+      writeStoredWalletMap(map);
+
+      return {
+        senderNewBalance: data.sender_new_balance ?? localResult.usdtBalance,
+        recipientNewBalance: data.recipient_new_balance ?? localResult.recipientUsdtBalance,
+        txHash: data.tx_hash ?? params.txHash,
+      };
+    }
+  } catch {
+    // Keep local transfer result when offline or in test environment
+  }
+
+  return {
+    senderNewBalance: localResult.usdtBalance,
+    recipientNewBalance: localResult.recipientUsdtBalance,
+    txHash: params.txHash,
+  };
+}
+
+export async function fetchAuthoritativeWalletBalance(
+  address: string,
+  profile?: { displayName?: string; email?: string }
+): Promise<{
+  usdtBalance: string;
+  nativeBalance: string;
+  linkedProfileName: string;
+  linkedProfileEmail: string;
+}> {
+  const local = ensureSimulatedWalletBalance(address, profile);
+
+  try {
+    const { data, error } = await (supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{
+      data: {
+        usdt_balance?: string | null;
+        email?: string | null;
+        display_name?: string | null;
+      } | null;
+      error: unknown;
+    }>)('get_my_usdt_balance', {
+      p_wallet_address: address,
+    });
+
+    if (!error && data && data.usdt_balance && !Number.isNaN(Number(data.usdt_balance))) {
+      const remoteUsdt = Number(data.usdt_balance);
+      const key = address.toLowerCase();
+      const map = readStoredWalletMap();
+      const updated = {
+        usdtBalance: remoteUsdt,
+        nativeBalance: Number(local.nativeBalance),
+        linkedProfileName: data.display_name || local.linkedProfileName,
+        linkedProfileEmail: data.email || local.linkedProfileEmail,
+        createdAt: new Date().toISOString(),
+      };
+      memoryWalletBalances.set(key, updated);
+      map[key] = updated;
+      writeStoredWalletMap(map);
+
+      return {
+        usdtBalance: remoteUsdt.toFixed(2),
+        nativeBalance: local.nativeBalance,
+        linkedProfileName: updated.linkedProfileName,
+        linkedProfileEmail: updated.linkedProfileEmail,
+      };
+    }
+  } catch {
+    // Fallback to local simulated balance
+  }
+
+  return local;
+}
+
+export async function syncPlatformRecipientsFromSupabase(): Promise<RecipientDirectoryEntry[]> {
+  try {
+    const { data, error } = await (supabase.rpc as unknown as (
+      fn: string
+    ) => Promise<{
+      data: Array<{
+        user_id: string;
+        display_name: string;
+        email: string;
+        wallet_address: string;
+        network: string;
+        usdt_balance: string;
+        completed_tx_count: number;
+        disputes_count: number;
+      }> | null;
+      error: unknown;
+    }>)('list_platform_recipients');
+
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        if (!row.wallet_address) continue;
+        const exists = RECIPIENT_DIRECTORY.some(
+          (r) =>
+            r.walletAddress.toLowerCase() === row.wallet_address.toLowerCase() ||
+            (r.email && row.email && r.email.toLowerCase() === row.email.toLowerCase())
+        );
+        if (!exists) {
+          const parts = (row.display_name || 'Word User').trim().split(/\s+/);
+          const firstName = parts[0] || 'Word';
+          const lastName = parts.slice(1).join(' ') || 'User';
+          const initials = `${firstName[0] ?? 'W'}${lastName[0] ?? 'U'}`.toUpperCase();
+          RECIPIENT_DIRECTORY.unshift({
+            id: `rec-db-${row.user_id}`,
+            firstName,
+            lastName,
+            fullName: `${firstName} ${lastName}`,
+            email: row.email,
+            avatarUrl: createAvatarDataUri(initials, '#0f5132', '#198754', '#75b798'),
+            walletAddress: row.wallet_address,
+            network: (row.network as SupportedNetworkName) || DEFAULT_DEMO_NETWORK,
+            trustScore: row.disputes_count > 0 ? Math.max(20, 85 - row.disputes_count * 20) : 96,
+            riskTier: row.disputes_count >= 2 ? 'high' : row.disputes_count === 1 ? 'moderate' : 'low',
+            completedTransactions: Math.max(1, Number(row.completed_tx_count) || 1),
+            disputesRaisedCount: Number(row.disputes_count) || 0,
+            verifiedIdentity: true,
+            memberSince: '2025',
+            roleOrTag: `Verified Account (${row.email}) · Clean Record`,
+            trackRecordSummary: `Verified Word platform account (${row.email}) with ${row.disputes_count || 0} disputes.`,
+            pastRecords: [],
+            disputes: [],
+          });
+        }
+      }
+    }
+  } catch {
+    // Ignore when offline
+  }
+  return RECIPIENT_DIRECTORY;
 }
 
 export async function verifySenderPasskey(params: {

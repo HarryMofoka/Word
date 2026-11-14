@@ -55,11 +55,12 @@ import { MutualTrustFlow } from '../mutual-trust/MutualTrustFlow';
 import { MutualTrustReceiptView } from '../mutual-trust/MutualTrustReceiptView';
 import {
   RECIPIENT_DIRECTORY,
-  deductSimulatedUsdtBalance,
   ensureSimulatedWalletBalance,
+  executeCrossAccountUsdtTransfer,
   getAdaptiveFrictionPolicy,
   lookupRecipientByAddressOrQuery,
   searchRecipients,
+  syncPlatformRecipientsFromSupabase,
   verifySenderPasskey,
   type PasskeyVerificationReceipt,
   type RecipientDirectoryEntry,
@@ -192,9 +193,17 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
   const [waitStarted, setWaitStarted] = useState(false);
   const [simulatedSettlementSummary, setSimulatedSettlementSummary] = useState<{
     newUsdtBalance: string;
+    recipientNewUsdtBalance?: string;
     frictionStepsCompleted: string[];
   } | null>(null);
   const [isSimulatedDirectSend, setIsSimulatedDirectSend] = useState(false);
+  const [, setDirectoryVersion] = useState(0);
+
+  useEffect(() => {
+    void syncPlatformRecipientsFromSupabase().then(() => {
+      setDirectoryVersion((v) => v + 1);
+    });
+  }, []);
 
   const normalizedNetwork =
     request.network === 'Testnet (Sepolia)' ? 'Testnet' : request.network;
@@ -335,7 +344,15 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
 
     await new Promise((r) => setTimeout(r, 900));
 
-    const updatedBalances = deductSimulatedUsdtBalance(wallet.address, Number(cleanAmount));
+    const transferResult = await executeCrossAccountUsdtTransfer({
+      senderAddress: wallet.address,
+      recipientAddress: selectedRecipient.walletAddress,
+      recipientName: selectedRecipient.fullName,
+      amountUsdt: Number(cleanAmount),
+      purpose: nextReq.description,
+      network: wallet.network,
+      txHash: generatedHash,
+    });
     onBalanceUpdated?.();
 
     const completedRecord: PaymentRecord = {
@@ -354,13 +371,18 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
 
     onRecordAdded(completedRecord);
     setSimulatedSettlementSummary({
-      newUsdtBalance: updatedBalances.usdtBalance,
+      newUsdtBalance: transferResult.senderNewBalance,
+      recipientNewUsdtBalance: transferResult.recipientNewBalance,
       frictionStepsCompleted: frictionPolicy.stepLabels,
     });
 
     onPushLiveNotification?.({
       title: `Stablecoin Sent: ${cleanAmount} USDT Confirmed`,
-      detail: `Settled ${cleanAmount} USDT to ${selectedRecipient.firstName} ${selectedRecipient.lastName}. Remaining balance: ${updatedBalances.usdtBalance} USDT.`,
+      detail: `Settled ${cleanAmount} USDT to ${selectedRecipient.firstName} ${selectedRecipient.lastName}. Your remaining balance: ${transferResult.senderNewBalance} USDT${
+        transferResult.recipientNewBalance
+          ? ` · Recipient updated balance: ${transferResult.recipientNewBalance} USDT`
+          : ''
+      }.`,
       category: 'Payment',
     });
 
@@ -500,6 +522,17 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     transaction: Parameters<typeof toPaymentRecord>[0] & { status?: string }
   ) => {
     if (transaction.status === 'confirmed') {
+      void executeCrossAccountUsdtTransfer({
+        senderAddress: wallet.address,
+        recipientAddress: transaction.recipient_address,
+        recipientName: transaction.recipient_name,
+        amountUsdt: Number(transaction.amount_numeric) || 0,
+        purpose: transaction.purpose,
+        network: transaction.network,
+        txHash: transaction.tx_hash ?? `0x${Date.now().toString(16)}`,
+      }).then(() => {
+        onBalanceUpdated?.();
+      });
       onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
       setStep('success');
     } else if (transaction.status === 'processing' || transaction.status === 'pending') {
@@ -2656,11 +2689,16 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           {simulatedSettlementSummary && (
             <div style={{ textAlign: 'right' }}>
               <span className="body-sm" style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block' }}>
-                New Wallet Balance
+                Your Remaining Balance
               </span>
-              <strong style={{ fontSize: '14.5px', color: '#1a8f4d' }}>
+              <strong style={{ fontSize: '14.5px', color: '#1a8f4d', display: 'block' }}>
                 {simulatedSettlementSummary.newUsdtBalance} USDT
               </strong>
+              {simulatedSettlementSummary.recipientNewUsdtBalance && (
+                <span className="body-sm" style={{ fontSize: '11.5px', color: '#1a8f4d', display: 'block', marginTop: '2px' }}>
+                  Receiver Credited: {simulatedSettlementSummary.recipientNewUsdtBalance} USDT
+                </span>
+              )}
             </div>
           )}
         </div>

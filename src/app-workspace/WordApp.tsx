@@ -46,7 +46,7 @@ import {
 } from '../services/accountabilityService';
 import {
   createSimulatedProfileWallet,
-  ensureSimulatedWalletBalance,
+  fetchAuthoritativeWalletBalance,
 } from '../services/recipientDirectoryService';
 import { OnboardingWelcome } from './components/OnboardingWelcome';
 import { WalletSetup } from './components/WalletSetup';
@@ -142,7 +142,7 @@ export const WordApp: React.FC<WordAppProps> = ({
     async (targetWallet: WalletState | null) => {
       if (!targetWallet?.address) return;
       setBalancesLoading(true);
-      const sim = ensureSimulatedWalletBalance(targetWallet.address, {
+      const sim = await fetchAuthoritativeWalletBalance(targetWallet.address, {
         displayName: session.displayName,
         email: session.email,
       });
@@ -174,6 +174,20 @@ export const WordApp: React.FC<WordAppProps> = ({
       refreshBalances(wallet);
     }
   }, [wallet?.address, wallet?.network, refreshBalances]);
+
+  useEffect(() => {
+    const handleStorageOrFocus = () => {
+      if (wallet?.address) {
+        void refreshBalances(wallet);
+      }
+    };
+    window.addEventListener('storage', handleStorageOrFocus);
+    window.addEventListener('focus', handleStorageOrFocus);
+    return () => {
+      window.removeEventListener('storage', handleStorageOrFocus);
+      window.removeEventListener('focus', handleStorageOrFocus);
+    };
+  }, [wallet, refreshBalances]);
 
   const refreshWorkspaceData = useCallback(async () => {
     if (!session.id) return;
