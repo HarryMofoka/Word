@@ -43,6 +43,7 @@ interface DashboardViewProps {
   onOpenMutualSession?: (sessionId: string) => void;
   onSelectRecord: (recordId: string) => void;
   onOpenSecurity: () => void;
+  onCreateNewSimulatedWallet?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -60,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenMutualSession,
   onSelectRecord,
   onOpenSecurity,
+  onCreateNewSimulatedWallet,
 }) => {
   const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
   const unreadNotifs = notifications.filter((n) => !n.read);
@@ -167,7 +169,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <p className="heading-sm" style={{ marginBottom: '6px' }}>
-            Self-custody wallet
+            Profile-linked wallet ({session.displayName})
           </p>
           <p className="body-sm" style={{ marginBottom: '18px' }}>
             {shortAddr} ·{' '}
@@ -187,6 +189,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               marginBottom: '18px',
             }}
           >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '13.5px',
+                marginBottom: '6px',
+              }}
+            >
+              <span style={{ color: 'var(--mute)' }}>Linked profile</span>
+              <span style={{ color: 'var(--ink)', fontWeight: 500 }}>
+                {session.displayName} ({session.email})
+              </span>
+            </div>
             <div
               style={{
                 display: 'flex',
@@ -223,6 +238,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button type="button" className="ws-ghost-btn" onClick={onOpenSecurity}>
               Recovery info
             </button>
+            {onCreateNewSimulatedWallet && (
+              <button
+                type="button"
+                className="ws-ghost-btn"
+                onClick={onCreateNewSimulatedWallet}
+                style={{ borderColor: 'var(--ink)', fontWeight: 600 }}
+              >
+                New Mock Wallet (2,500 USDT)
+              </button>
+            )}
           </div>
         </div>
       </div>

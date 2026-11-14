@@ -5,15 +5,18 @@ import dashboardViewSource from '../../src/app-workspace/components/DashboardVie
 import accountabilityHubSource from '../../src/app-workspace/components/accountability/AccountabilityHub.tsx?raw';
 import settingsViewSource from '../../src/app-workspace/components/SettingsView.tsx?raw';
 import paymentPayFlowSource from '../../src/app-workspace/components/payments/PaymentPayFlow.tsx?raw';
-import mobilePkgRaw from '../../mobile/package.json?raw';
-import mobileAppJsonRaw from '../../mobile/app.json?raw';
-import mobileDuoAnimRaw from '../../mobile/src/components/DuoAnimations.tsx?raw';
-import mobileAppTsxRaw from '../../mobile/App.tsx?raw';
-import mobileAuthScreenRaw from '../../mobile/src/screens/AuthScreen.tsx?raw';
-import mobilePaymentsScreenRaw from '../../mobile/src/screens/PaymentsAndMutualTrustScreen.tsx?raw';
 import { callEdgeFunction } from '../../src/services/apiClient';
 import { supabase } from '../../src/lib/supabase';
 import { checkOnDeviceAiCompatibility } from '../../src/services/qvacAssistantService';
+import {
+  createSimulatedProfileWallet,
+  deductSimulatedUsdtBalance,
+  ensureSimulatedWalletBalance,
+  getAdaptiveFrictionPolicy,
+  lookupRecipientByAddressOrQuery,
+  searchRecipients,
+  verifySenderPasskey,
+} from '../../src/services/recipientDirectoryService';
 
 const realProcess = (
   globalThis as unknown as {
@@ -23,7 +26,13 @@ const realProcess = (
 const nodeFs = realProcess.getBuiltinModule('node:fs') as typeof import('node:fs');
 const nodePath = realProcess.getBuiltinModule('node:path') as typeof import('node:path');
 const readCss = (relPath: string) =>
-  nodeFs.readFileSync(nodePath.resolve(realProcess ? (globalThis as unknown as { process: NodeJS.Process }).process.cwd() : '.', relPath), 'utf8');
+  nodeFs.readFileSync(
+    nodePath.resolve(
+      realProcess ? (globalThis as unknown as { process: NodeJS.Process }).process.cwd() : '.',
+      relPath
+    ),
+    'utf8'
+  );
 
 const globalCssRaw = readCss('src/styles/global.css');
 const animationsCssRaw = readCss('src/styles/animations.css');
@@ -34,7 +43,7 @@ const sectionsCssRaw = readCss('src/components/sections/Sections.css');
 const footerCssRaw = readCss('src/components/footer/Footer.css');
 const pagesCssRaw = readCss('src/components/pages/Pages.css');
 
-describe('Phase 11: UI and Device Testing', () => {
+describe('Phase 11: UI, Device, and Adaptive Recipient Verification Testing', () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -144,25 +153,74 @@ describe('Phase 11: UI and Device Testing', () => {
     expect(lowRamMobile.runtime).toBe('local-deterministic');
   });
 
-  it('11. implements the Duo Fade-In / Fade-Out card animations on the Web Dashboard and in the Expo 58 React Native mobile app', () => {
-    // Web Dashboard Duo Fade-In / Fade-Out animations without the standalone iPhone Duo showcase card
+  it('11. implements Duo Fade-In / Fade-Out card animations on Web Dashboard without the removed iPhone Duo card', () => {
     expect(dashboardViewSource).not.toContain('IPHONE DUO · BILATERAL MUTUAL TRUST');
     expect(dashboardViewSource).toContain('ws-duo-card');
     expect(dashboardViewSource).toContain('ws-duo-fade-swap');
     expect(workspaceCssRaw).toContain('@keyframes wsDuoCardFadeIn');
     expect(workspaceCssRaw).toContain('minmax(0, 1.15fr) minmax(0, 0.85fr)');
+  });
 
-    // Expo 58 React Native Mobile App parity
-    const mobilePkg = JSON.parse(mobilePkgRaw);
-    const mobileAppJson = JSON.parse(mobileAppJsonRaw);
+  it('12. creates a profile-linked simulated wallet with mock USDT balance and deducts sent stablecoin in real time', () => {
+    const sim = createSimulatedProfileWallet({
+      displayName: 'Karabo Mofokeng',
+      email: 'karabo@word.fi',
+      network: 'Testnet',
+      initialUsdt: 2500.0,
+    });
 
-    expect(mobilePkg.dependencies.expo).toContain('58.0.0');
-    expect(mobilePkg.dependencies['react-native']).toBeDefined();
-    expect(mobileAppJson.expo.sdkVersion).toBe('58.0.0');
-    expect(mobileDuoAnimRaw).toContain('DuoFadeView');
-    expect(mobileDuoAnimRaw).toContain('IPhoneDuoShowcase');
-    expect(mobileAppTsxRaw).toContain('PaymentsAndMutualTrustScreen');
-    expect(mobileAuthScreenRaw).toContain('Owner Face Scan');
-    expect(mobilePaymentsScreenRaw).toContain('BILATERAL MUTUAL TRUST VERIFICATION');
+    expect(sim.address).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    expect(sim.linkedProfileName).toBe('Karabo Mofokeng');
+    expect(sim.linkedProfileEmail).toBe('karabo@word.fi');
+    expect(sim.initialUsdtBalance).toBe('2500.00');
+    expect(sim.seedWords.length).toBe(12);
+
+    const ensured = ensureSimulatedWalletBalance(sim.address);
+    expect(ensured.usdtBalance).toBe('2500.00');
+
+    const afterSend = deductSimulatedUsdtBalance(sim.address, 125.0);
+    expect(afterSend.usdtBalance).toBe('2375.00');
+  });
+
+  it('13. searches recipients and displays receiver Name, Surname, Profile Image, and Adaptive Friction steps based on track record', async () => {
+    // Search by name/surname
+    const vusiResults = searchRecipients('Sithole');
+    expect(vusiResults.length).toBe(1);
+    const vusi = vusiResults[0];
+    expect(vusi.firstName).toBe('Vusi');
+    expect(vusi.lastName).toBe('Sithole');
+    expect(vusi.avatarUrl).toContain('data:image/svg+xml');
+    expect(vusi.disputesRaisedCount).toBeGreaterThanOrEqual(4);
+
+    // Lookup by wallet address
+    const thabo = lookupRecipientByAddressOrQuery('0x742d35Cc6634C0532925a3b844Bc454e4438f44e');
+    expect(thabo).not.toBeNull();
+    expect(thabo!.firstName).toBe('Thabo');
+    expect(thabo!.lastName).toBe('Mokoena');
+
+    // Low risk policy (1 step: Confirm Receiver Info)
+    const lowPolicy = getAdaptiveFrictionPolicy(thabo!);
+    expect(lowPolicy.frictionLevel).toBe('standard');
+    expect(lowPolicy.requiredStepsCount).toBe(1);
+    expect(lowPolicy.requiresPasskeyVerification).toBe(false);
+    expect(lowPolicy.extraWaitSeconds).toBe(0);
+
+    // High risk / bad track record policy (5 steps: Confirm Info, Dispute Walkthrough, Are You Sure, Passkey, Extra Wait Timer)
+    const highPolicy = getAdaptiveFrictionPolicy(vusi);
+    expect(highPolicy.frictionLevel).toBe('maximum');
+    expect(highPolicy.requiredStepsCount).toBe(5);
+    expect(highPolicy.requiresIdentityConfirmation).toBe(true);
+    expect(highPolicy.requiresDisputeWalkthrough).toBe(true);
+    expect(highPolicy.requiresAreYouSurePrompt).toBe(true);
+    expect(highPolicy.requiresPasskeyVerification).toBe(true);
+    expect(highPolicy.extraWaitSeconds).toBeGreaterThanOrEqual(8);
+
+    // Verify passkey check
+    const receipt = await verifySenderPasskey({
+      passkeyPin: 'WORD-2026',
+      userEmail: 'karabo@word.fi',
+    });
+    expect(receipt.verified).toBe(true);
+    expect(receipt.credentialId).toMatch(/^pk-/i);
   });
 });

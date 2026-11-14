@@ -48,21 +48,31 @@ function toRequestData(row: PaymentRequestRow): PaymentRequestData {
 
 interface PaymentsHubProps {
   userId?: string;
+  userEmail?: string;
   wallet: WalletState;
   initialMode?: PaymentFlowMode;
   initialRequest?: PaymentRequestData | null;
   initialMutualSessionId?: string | null;
   onRecordAdded: (rec: PaymentRecord) => void;
+  onPushLiveNotification?: (notif: {
+    title: string;
+    detail: string;
+    category: 'Payment' | 'Verification' | 'Security';
+  }) => void;
+  onBalanceUpdated?: () => void;
   onDoneToDashboard: () => void;
 }
 
 export const PaymentsHub: React.FC<PaymentsHubProps> = ({
   userId,
+  userEmail,
   wallet,
   initialMode = 'hub',
   initialRequest = null,
   initialMutualSessionId = null,
   onRecordAdded,
+  onPushLiveNotification,
+  onBalanceUpdated,
   onDoneToDashboard,
 }) => {
   const [mode, setMode] = useState<PaymentFlowMode>(initialMode);
@@ -171,6 +181,7 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
     return (
       <PaymentPayFlow
         userId={userId}
+        userEmail={userEmail}
         wallet={wallet}
         initialRequest={previewReq}
         initialMutualSession={handedOffMutualSession}
@@ -180,6 +191,8 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
           setMode('hub');
         }}
         onRecordAdded={onRecordAdded}
+        onPushLiveNotification={onPushLiveNotification}
+        onBalanceUpdated={onBalanceUpdated}
         onDoneToDashboard={onDoneToDashboard}
       />
     );
@@ -236,11 +249,12 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
             </span>
             <div>
               <h2 className="heading-sm" style={{ fontSize: '15.5px', marginBottom: '4px' }}>
-                Scan QR code &amp; pay
+                Send stablecoin · Search recipient or scan QR
               </h2>
               <p className="body-sm">
-                Scan or paste a payment request, complete Mutual Trust verification, review risk
-                indicators, and co-sign before approving.
+                Search for a recipient or enter a wallet address to inspect their Name, Surname,
+                Image, and Track Record — with adaptive passkey, dispute review, and cooling-off
+                friction for high-risk accounts.
               </p>
             </div>
           </div>

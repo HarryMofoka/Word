@@ -44,6 +44,10 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '../services/accountabilityService';
+import {
+  createSimulatedProfileWallet,
+  ensureSimulatedWalletBalance,
+} from '../services/recipientDirectoryService';
 import { OnboardingWelcome } from './components/OnboardingWelcome';
 import { WalletSetup } from './components/WalletSetup';
 import { WalletImport } from './components/WalletImport';
@@ -109,17 +113,61 @@ export const WordApp: React.FC<WordAppProps> = ({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [balances, setBalances] = useState<WalletBalances | null>(null);
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const [liveToasts, setLiveToasts] = useState<AppNotification[]>([]);
 
-  const refreshBalances = useCallback(async (targetWallet: WalletState | null) => {
-    if (!targetWallet?.address) return;
-    setBalancesLoading(true);
-    try {
-      const next = await fetchWdkBalances(targetWallet.address, targetWallet.network);
-      setBalances(next);
-    } finally {
-      setBalancesLoading(false);
-    }
-  }, []);
+  const pushLiveNotification = useCallback(
+    (notif: {
+      title: string;
+      detail: string;
+      category: 'Payment' | 'Verification' | 'Security';
+    }) => {
+      const item: AppNotification = {
+        id: `live-notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        title: notif.title,
+        detail: notif.detail,
+        time: 'Just now',
+        category: notif.category,
+        read: false,
+      };
+      setNotifications((prev) => [item, ...prev]);
+      setLiveToasts((prev) => [item, ...prev].slice(0, 3));
+      window.setTimeout(() => {
+        setLiveToasts((prev) => prev.filter((t) => t.id !== item.id));
+      }, 6500);
+    },
+    []
+  );
+
+  const refreshBalances = useCallback(
+    async (targetWallet: WalletState | null) => {
+      if (!targetWallet?.address) return;
+      setBalancesLoading(true);
+      const sim = ensureSimulatedWalletBalance(targetWallet.address, {
+        displayName: session.displayName,
+        email: session.email,
+      });
+      try {
+        const next = await fetchWdkBalances(targetWallet.address, targetWallet.network);
+        const onChainUsdt = Number(next.usdtBalance);
+        setBalances({
+          ...next,
+          usdtBalance: onChainUsdt > 0 ? next.usdtBalance : sim.usdtBalance,
+          nativeBalance: Number(next.nativeBalance) > 0 ? next.nativeBalance : sim.nativeBalance,
+        });
+      } catch {
+        setBalances({
+          usdtBalance: sim.usdtBalance,
+          nativeBalance: sim.nativeBalance,
+          nativeSymbol: 'ETH',
+          networkLabel: targetWallet.network,
+          rpcReachable: true,
+        });
+      } finally {
+        setBalancesLoading(false);
+      }
+    },
+    [session.displayName, session.email]
+  );
 
   useEffect(() => {
     if (wallet?.address) {
@@ -314,6 +362,33 @@ export const WordApp: React.FC<WordAppProps> = ({
     onWalletChange(next);
   };
 
+  const handleCreateNewSimulatedWallet = async () => {
+    const sim = createSimulatedProfileWallet({
+      displayName: session.displayName,
+      email: session.email,
+      network: wallet?.network ?? 'Testnet',
+      initialUsdt: 2500.0,
+    });
+    const candidate: WalletState = {
+      address: sim.address,
+      method: 'created',
+      network: sim.network,
+      recoveryBackedUp: true,
+      isVerified: true,
+    };
+    const persisted = await persistWalletRegistration(
+      candidate,
+      sim.seedWords.join(' ')
+    );
+    updateWallet(persisted);
+    await refreshBalances(persisted);
+    pushLiveNotification({
+      title: 'Profile-Linked Wallet Created (2,500.00 USDT)',
+      detail: `New wallet ${sim.address.slice(0, 8)}...${sim.address.slice(-4)} linked to ${session.displayName} (${session.email}) and funded with 2,500.00 USDT.`,
+      category: 'Security',
+    });
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const stepIndex =
@@ -416,6 +491,66 @@ export const WordApp: React.FC<WordAppProps> = ({
 
       <main className="ws-main">
         <Container>
+          {liveToasts.length > 0 && (
+            <div
+              role="region"
+              aria-label="Live notifications"
+              style={{
+                position: 'fixed',
+                top: '76px',
+                right: '20px',
+                zIndex: 1200,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                maxWidth: '380px',
+                width: 'calc(100vw - 40px)',
+              }}
+            >
+              {liveToasts.map((toast) => (
+                <div
+                  key={toast.id}
+                  className="ws-card ws-duo-fade-swap"
+                  style={{
+                    padding: '14px 16px',
+                    boxShadow: '0 14px 32px rgba(0, 0, 0, 0.14)',
+                    border: '1.5px solid var(--ink)',
+                    backgroundColor: 'var(--surface)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    <span className="eyebrow" style={{ fontSize: '10.5px', color: '#1a8f4d' }}>
+                      ● LIVE {toast.category.toUpperCase()} NOTIFICATION
+                    </span>
+                    <button
+                      type="button"
+                      className="ws-ghost-btn"
+                      style={{ padding: '2px 8px', fontSize: '11px' }}
+                      onClick={() =>
+                        setLiveToasts((prev) => prev.filter((t) => t.id !== toast.id))
+                      }
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '2px' }}>
+                    {toast.title}
+                  </strong>
+                  <p className="body-sm" style={{ fontSize: '12.5px', margin: 0 }}>
+                    {toast.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
           {syncError && (
             <div
               role="alert"
@@ -468,16 +603,29 @@ export const WordApp: React.FC<WordAppProps> = ({
 
               {step === 'wallet-setup' && (
                 <WalletSetup
+                  session={session}
                   onBack={() => setStep('welcome')}
                   onCreateWallet={async (newWallet) => {
                     const persisted = await persistWalletRegistration(newWallet);
                     updateWallet(persisted);
+                    await refreshBalances(persisted);
+                    pushLiveNotification({
+                      title: 'Wallet Created & Linked to Profile',
+                      detail: `Wallet ${persisted.address.slice(0, 8)}...${persisted.address.slice(-4)} linked to ${session.displayName} with 2,500.00 USDT mock balance.`,
+                      category: 'Security',
+                    });
                     setPreviousStepBeforeSecurity('wallet-setup');
                     setStep('recovery-info');
                   }}
                   onConnectWallet={async (connectedWallet) => {
                     const persisted = await persistWalletRegistration(connectedWallet);
                     updateWallet(persisted);
+                    await refreshBalances(persisted);
+                    pushLiveNotification({
+                      title: 'Profile-Linked Wallet Active (2,500.00 USDT)',
+                      detail: `Wallet ${persisted.address.slice(0, 8)}...${persisted.address.slice(-4)} linked to ${session.displayName} (${session.email}) with 2,500.00 USDT mock balance.`,
+                      category: 'Security',
+                    });
                     setStep('wallet-confirm');
                   }}
                   onGoToImport={() => setStep('wallet-import')}
@@ -568,6 +716,7 @@ export const WordApp: React.FC<WordAppProps> = ({
                       setPreviousStepBeforeSecurity('workspace');
                       setStep('recovery-info');
                     }}
+                    onCreateNewSimulatedWallet={handleCreateNewSimulatedWallet}
                   />
                 )}
 
@@ -575,14 +724,20 @@ export const WordApp: React.FC<WordAppProps> = ({
                   <PaymentsHub
                     key={`${paymentInitialMode}-${assistantHandoffRequest?.id ?? 'none'}-${selectedMutualSessionId ?? 'none'}`}
                     userId={session.id}
+                    userEmail={session.email}
                     wallet={wallet}
                     initialMode={paymentInitialMode}
                     initialRequest={assistantHandoffRequest}
                     initialMutualSessionId={selectedMutualSessionId}
                     onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
+                    onPushLiveNotification={pushLiveNotification}
+                    onBalanceUpdated={() => {
+                      void refreshBalances(wallet);
+                    }}
                     onDoneToDashboard={() => {
                       setAssistantHandoffRequest(null);
                       setSelectedMutualSessionId(null);
+                      void refreshBalances(wallet);
                       void refreshWorkspaceData();
                       setActiveTab('dashboard');
                     }}
@@ -611,10 +766,12 @@ export const WordApp: React.FC<WordAppProps> = ({
 
                 {activeTab === 'wallet' && (
                   <WalletOverviewView
+                    session={session}
                     wallet={wallet}
                     balances={balances}
                     balancesLoading={balancesLoading}
                     onRefreshBalances={() => refreshBalances(wallet)}
+                    onCreateNewSimulatedWallet={handleCreateNewSimulatedWallet}
                     balanceHidden={balanceHidden}
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}

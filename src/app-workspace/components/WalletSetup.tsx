@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, KeyRound, Plus, Wallet } from 'lucide-react';
-import type { WalletState } from '../types';
+import { ArrowLeft, ArrowRight, CheckCircle2, KeyRound, Plus, Sparkles, Wallet } from 'lucide-react';
+import type { UserSession, WalletState } from '../types';
 import {
   connectBrowserWallet,
   createWdkWallet,
 } from '../../services/wdkWalletService';
+import { createSimulatedProfileWallet } from '../../services/recipientDirectoryService';
 
 interface WalletSetupProps {
+  session?: UserSession;
   onBack: () => void;
   onCreateWallet: (wallet: WalletState) => void;
   onConnectWallet: (wallet: WalletState) => void;
@@ -14,6 +16,7 @@ interface WalletSetupProps {
 }
 
 export const WalletSetup: React.FC<WalletSetupProps> = ({
+  session,
   onBack,
   onCreateWallet,
   onConnectWallet,
@@ -22,12 +25,48 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
   const [connectStatus, setConnectStatus] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSimulatingInstant, setIsSimulatingInstant] = useState(false);
+
+  const handleCreateSimulatedProfileWallet = async () => {
+    setIsSimulatingInstant(true);
+    setConnectStatus(null);
+    try {
+      const sim = createSimulatedProfileWallet({
+        displayName: session?.displayName || 'Word Account Owner',
+        email: session?.email || 'owner@word.fi',
+        network: 'Testnet',
+        initialUsdt: 2500.0,
+      });
+      onConnectWallet({
+        address: sim.address,
+        method: 'created',
+        network: sim.network,
+        recoveryBackedUp: true,
+        isVerified: true,
+        demoSeedWords: sim.seedWords,
+      });
+    } catch (err) {
+      setConnectStatus(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create profile-linked simulated wallet.'
+      );
+    } finally {
+      setIsSimulatingInstant(false);
+    }
+  };
 
   const handleCreate = async () => {
     setIsCreating(true);
     setConnectStatus(null);
     try {
       const created = await createWdkWallet('Testnet');
+      createSimulatedProfileWallet({
+        displayName: session?.displayName || 'Word Account Owner',
+        email: session?.email || 'owner@word.fi',
+        network: created.network,
+        initialUsdt: 2500.0,
+      });
       onCreateWallet({
         address: created.address,
         method: 'created',
@@ -77,16 +116,78 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
       <h1 className="heading-lg" style={{ marginBottom: '12px' }}>
         Create or connect a wallet.
       </h1>
-      <p className="body-md">
-        Choose how you want to interact with Word. Private keys stay under your control.
+      <p className="body-md" style={{ marginBottom: '16px' }}>
+        Create a new wallet address linked directly to your profile{' '}
+        {session?.displayName ? `(${session.displayName})` : ''} with simulated stablecoin funds ready
+        to test live transfers.
       </p>
 
       <div className="ws-option-list">
         <button
           type="button"
           className="ws-option-btn"
+          onClick={handleCreateSimulatedProfileWallet}
+          disabled={isSimulatingInstant || isCreating || isConnecting}
+          style={{
+            borderColor: 'var(--ink)',
+            backgroundColor: 'rgba(17, 17, 17, 0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+            <span
+              className="ws-option-icon"
+              aria-hidden="true"
+              style={{ backgroundColor: 'var(--ink)', color: '#fff' }}
+            >
+              <Sparkles size={18} />
+            </span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                <h2 className="heading-sm" style={{ fontSize: '15.5px', margin: 0 }}>
+                  {isSimulatingInstant
+                    ? 'Creating profile-linked wallet...'
+                    : 'Create a new profile-linked wallet (Instant Mock Data)'}
+                </h2>
+                <span className="ws-badge" style={{ fontSize: '11px' }}>
+                  2,500.00 USDT Seeded
+                </span>
+              </div>
+              <p className="body-sm">
+                Generates a new wallet address linked to{' '}
+                <strong>{session?.displayName || 'your profile'}</strong> ({session?.email || 'active session'}),
+                pre-funded with <strong>2,500.00 USDT</strong> + <strong>1.5000 ETH</strong> gas and live notifications.
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  marginTop: '8px',
+                  fontSize: '12px',
+                  color: '#1a8f4d',
+                  fontWeight: 500,
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle2 size={13} /> Linked to profile
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle2 size={13} /> 2,500.00 USDT mock balance
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle2 size={13} /> Real-time notifications
+                </span>
+              </div>
+            </div>
+          </div>
+          <ArrowRight size={16} style={{ marginTop: '4px', color: 'var(--ink)' }} />
+        </button>
+
+        <button
+          type="button"
+          className="ws-option-btn"
           onClick={handleCreate}
-          disabled={isCreating || isConnecting}
+          disabled={isCreating || isConnecting || isSimulatingInstant}
         >
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span className="ws-option-icon" aria-hidden="true">
@@ -94,11 +195,11 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
             </span>
             <div>
               <h2 className="heading-sm" style={{ fontSize: '15.5px', marginBottom: '4px' }}>
-                {isCreating ? 'Creating WDK wallet...' : 'Create a new wallet'}
+                {isCreating ? 'Creating WDK wallet...' : 'Create a new wallet (Manual Recovery Backup)'}
               </h2>
               <p className="body-sm">
-                Generate a fresh self-custodial testnet wallet locally via Tether WDK and back up
-                its recovery phrase.
+                Generate a fresh self-custodial testnet wallet locally via Tether WDK and step through
+                its 12-word recovery phrase backup.
               </p>
             </div>
           </div>
@@ -109,7 +210,7 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
           type="button"
           className="ws-option-btn"
           onClick={handleConnectExisting}
-          disabled={isConnecting}
+          disabled={isConnecting || isSimulatingInstant}
         >
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span className="ws-option-icon" aria-hidden="true">
@@ -157,10 +258,9 @@ export const WalletSetup: React.FC<WalletSetupProps> = ({
           <ArrowLeft size={15} /> Back
         </button>
         <span className="body-sm" style={{ color: 'var(--mute)' }}>
-          Self-custody · Testnet
+          Self-custody · Profile-Linked Simulation
         </span>
       </div>
     </div>
   );
 };
-
