@@ -92,19 +92,24 @@ export const App: React.FC = () => {
       }
     };
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (data.session?.user) {
-        const u = data.session.user;
-        const fallbackName =
-          (u.user_metadata?.display_name as string | undefined) ||
-          u.email?.split('@')[0] ||
-          'Word User';
-        hydrateUser(u.id, u.email ?? '', fallbackName);
-      } else {
-        setAuthReady(true);
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        if (data.session?.user) {
+          const u = data.session.user;
+          const fallbackName =
+            (u.user_metadata?.display_name as string | undefined) ||
+            u.email?.split('@')[0] ||
+            'Word User';
+          hydrateUser(u.id, u.email ?? '', fallbackName);
+        } else {
+          setAuthReady(true);
+        }
+      })
+      .catch(() => {
+        if (active) setAuthReady(true);
+      });
 
     const {
       data: { subscription },

@@ -34,6 +34,9 @@ export function resolveAllowedOrigin(
   if (allowlist.includes(normalized)) {
     return normalized;
   }
+  if (!allowedOrigins && /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/i.test(normalized)) {
+    return normalized;
+  }
   return null;
 }
 
