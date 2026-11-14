@@ -489,10 +489,12 @@ Deno.serve(async (req: Request) => {
             .order('created_at', { ascending: false })
             .limit(10);
 
-          const matchingRecord = (pendingRecord ?? []).find((rec) => {
-            const meta = rec.proof_metadata as Record<string, unknown> | null;
-            return meta?.providerSessionId === providerSessionId;
-          });
+          const matchingRecord = (pendingRecord ?? []).find(
+            (rec: { proof_metadata?: unknown }) => {
+              const meta = rec.proof_metadata as Record<string, unknown> | null;
+              return meta?.providerSessionId === providerSessionId;
+            }
+          );
           const expectedChallenges = Array.isArray(
             (matchingRecord?.proof_metadata as Record<string, unknown> | null)?.expectedChallenges
           )

@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
           if (reqProofs?.[0]?.status === 'mismatch') hasMismatchProof = true;
         }
 
-    if(/^ 0x0{ 6, } / i.test(recipientAddress) || recipientAddress.toLowerCase().includes('dead')) {
+    if (/^0x0{6,}/i.test(recipientAddress) || recipientAddress.toLowerCase().includes('dead')) {
         add({
           code: 'SUSPICIOUS_BURN_ADDRESS',
           category: 'wallet_verification',

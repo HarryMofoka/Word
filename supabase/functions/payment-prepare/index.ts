@@ -147,7 +147,7 @@ Deno.serve(async (req: Request) => {
             .select('*')
             .eq('id', String(mutualSession.sender_identity_id))
             .maybeSingle()
-            .then((r) => r.data)
+            .then((r: { data: Record<string, unknown> | null }) => r.data)
         : Promise.resolve(null),
       mutualSession.recipient_identity_id
         ? adminClient
@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
             .select('*')
             .eq('id', String(mutualSession.recipient_identity_id))
             .maybeSingle()
-            .then((r) => r.data)
+            .then((r: { data: Record<string, unknown> | null }) => r.data)
         : Promise.resolve(null),
     ]);
 
@@ -187,10 +187,12 @@ Deno.serve(async (req: Request) => {
       .eq('approval_status', 'approved');
 
     const senderApproval = (activeApprovals ?? []).find(
-      (a) => a.approval_role === 'sender' && a.approving_user_id === mutualSession.sender_id
+      (a: Record<string, unknown>) =>
+        a.approval_role === 'sender' && a.approving_user_id === mutualSession.sender_id
     );
     const recipientApproval = (activeApprovals ?? []).find(
-      (a) => a.approval_role === 'recipient' && a.approving_user_id === mutualSession.recipient_id
+      (a: Record<string, unknown>) =>
+        a.approval_role === 'recipient' && a.approving_user_id === mutualSession.recipient_id
     );
 
     if (!senderApproval?.signature || !recipientApproval?.signature) {

@@ -114,7 +114,9 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw new AppError(500, 'LIST_FAILED', error.message);
       const checkedList = await Promise.all(
-        (data ?? []).map((row) => expireIfPastDue(adminClient, row))
+        (data ?? []).map((row: { id: string; status: string; expires_at: string | null } & Record<string, unknown>) =>
+          expireIfPastDue(adminClient, row)
+        )
       );
       return jsonResponse({ requests: checkedList }, 200, req);
     }

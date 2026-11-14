@@ -8,6 +8,30 @@ import { enforceRateLimit } from '../_shared/rateLimit.ts';
 import { toSanitizedCounterpartyReport } from '../_shared/identityProvider.ts';
 import { signReceiptHmac } from '../_shared/mutualTrustServer.ts';
 
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
+interface ApprovalLookupRow {
+  id: string;
+  approval_role: string;
+  approved_at: string | null;
+}
+
+interface ProfileLookupRow {
+  id: string;
+  display_name: string | null;
+}
+
+interface WalletLookupRow {
+  user_id: string;
+  address: string;
+  is_verified: boolean | null;
+}
+
 const NETWORK_RPC_URLS: Record<string, string> = {
   Testnet: Deno.env.get('SEPOLIA_RPC_URL') ?? 'https://ethereum-sepolia-rpc.publicnode.com',
   'Base Sepolia': Deno.env.get('BASE_SEPOLIA_RPC_URL') ?? 'https://sepolia.base.org',
@@ -193,17 +217,29 @@ Deno.serve(async (req: Request) => {
             .maybeSingle(),
         ]);
 
-        const senderApp = (approvals ?? []).find((a) => a.approval_role === 'sender');
-        const recipientApp = (approvals ?? []).find((a) => a.approval_role === 'recipient');
-        const senderProf = (profiles ?? []).find((p) => p.id === mSession.sender_id);
-        const recipientProf = (profiles ?? []).find((p) => p.id === mSession.recipient_id);
-        const senderW = (wallets ?? []).find(
-          (w) =>
+        const approvalList = (approvals ?? []) as ApprovalLookupRow[];
+        const profileList = (profiles ?? []) as ProfileLookupRow[];
+        const walletList = (wallets ?? []) as WalletLookupRow[];
+
+        const senderApp = approvalList.find(
+          (a: ApprovalLookupRow) => a.approval_role === 'sender'
+        );
+        const recipientApp = approvalList.find(
+          (a: ApprovalLookupRow) => a.approval_role === 'recipient'
+        );
+        const senderProf = profileList.find(
+          (p: ProfileLookupRow) => p.id === mSession.sender_id
+        );
+        const recipientProf = profileList.find(
+          (p: ProfileLookupRow) => p.id === mSession.recipient_id
+        );
+        const senderW = walletList.find(
+          (w: WalletLookupRow) =>
             w.user_id === mSession.sender_id &&
             w.address.toLowerCase() === String(mSession.sender_wallet_address).toLowerCase()
         );
-        const recipientW = (wallets ?? []).find(
-          (w) =>
+        const recipientW = walletList.find(
+          (w: WalletLookupRow) =>
             w.user_id === mSession.recipient_id &&
             w.address.toLowerCase() === String(mSession.recipient_wallet_address).toLowerCase()
         );

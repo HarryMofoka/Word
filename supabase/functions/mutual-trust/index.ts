@@ -61,7 +61,10 @@ async function resolveUserWalletAddress(
   }
 
   if (requestedAddress) {
-    const match = list.find((w) => w.address.toLowerCase() === requestedAddress.toLowerCase());
+    const match = list.find(
+      (w: { address: string; is_verified?: boolean; is_primary?: boolean }) =>
+        w.address.toLowerCase() === requestedAddress.toLowerCase()
+    );
     if (!match) {
       throw new AppError(
         403,
@@ -72,7 +75,15 @@ async function resolveUserWalletAddress(
     return getAddress(match.address);
   }
 
-  const verifiedPrimary = list.find((w) => w.is_verified && w.is_primary) ?? list.find((w) => w.is_verified) ?? list[0];
+  const verifiedPrimary =
+    list.find(
+      (w: { address: string; is_verified?: boolean; is_primary?: boolean }) =>
+        w.is_verified && w.is_primary
+    ) ??
+    list.find(
+      (w: { address: string; is_verified?: boolean; is_primary?: boolean }) => w.is_verified
+    ) ??
+    list[0];
   return getAddress(verifiedPrimary.address);
 }
 
@@ -258,10 +269,14 @@ Deno.serve(async (req: Request) => {
       }
 
       const refreshedList = await Promise.all(
-        (list ?? []).map((row) => refreshSessionExpiryAndIdentities(adminClient, row))
+        (list ?? []).map((row: Record<string, unknown>) =>
+          refreshSessionExpiryAndIdentities(adminClient, row)
+        )
       );
       const hydratedList = await Promise.all(
-        refreshedList.map((row) => hydrateMutualSession(adminClient, row))
+        refreshedList.map((row: Record<string, unknown>) =>
+          hydrateMutualSession(adminClient, row)
+        )
       );
 
       return jsonResponse({ sessions: hydratedList }, 200, req);
@@ -760,7 +775,7 @@ Deno.serve(async (req: Request) => {
               .select('*')
               .eq('id', String(session.sender_identity_id))
               .maybeSingle()
-              .then((r) => r.data)
+              .then((r: { data: Record<string, unknown> | null }) => r.data)
             : Promise.resolve(null),
           session.recipient_identity_id
             ? adminClient
@@ -768,7 +783,7 @@ Deno.serve(async (req: Request) => {
               .select('*')
               .eq('id', String(session.recipient_identity_id))
               .maybeSingle()
-              .then((r) => r.data)
+              .then((r: { data: Record<string, unknown> | null }) => r.data)
             : Promise.resolve(null),
         ]);
 

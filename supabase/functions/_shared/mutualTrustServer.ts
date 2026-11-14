@@ -127,9 +127,10 @@ export async function fetchLatestValidOrRecentIdentity(
     .order('created_at', { ascending: false })
     .limit(5);
 
-  const rows = data ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[];
   if (rows.length === 0) return null;
-  const activeVerified = rows.find((r) => isIdentityRowValid(r));
+  const activeVerified = rows.find((r: Record<string, unknown>) => isIdentityRowValid(r as never));
   return activeVerified ?? rows[0];
 }
 
@@ -421,13 +422,19 @@ export async function hydrateMutualSession(
       .maybeSingle(),
   ]);
 
-  const senderProfile = (profiles ?? []).find((p) => p.id === senderId);
-  const recipientProfile = (profiles ?? []).find((p) => p.id === recipientId);
+  const senderProfile = (profiles ?? []).find(
+    (p: { id?: string; display_name?: string }) => p.id === senderId
+  );
+  const recipientProfile = (profiles ?? []).find(
+    (p: { id?: string; display_name?: string }) => p.id === recipientId
+  );
   const senderWalletRow = (wallets ?? []).find(
-    (w) => w.user_id === senderId && w.address.toLowerCase() === senderWallet.toLowerCase()
+    (w: { user_id?: string; address: string; is_verified?: boolean }) =>
+      w.user_id === senderId && w.address.toLowerCase() === senderWallet.toLowerCase()
   );
   const recipientWalletRow = (wallets ?? []).find(
-    (w) => w.user_id === recipientId && w.address.toLowerCase() === recipientWallet.toLowerCase()
+    (w: { user_id?: string; address: string; is_verified?: boolean }) =>
+      w.user_id === recipientId && w.address.toLowerCase() === recipientWallet.toLowerCase()
   );
 
   const senderReport = toSanitizedCounterpartyReport({
@@ -448,11 +455,13 @@ export async function hydrateMutualSession(
 
   const activeSenderApproval =
     (approvals ?? []).find(
-      (a) => a.approval_role === 'sender' && a.approval_status === 'approved'
+      (a: { approval_role?: string; approval_status?: string }) =>
+        a.approval_role === 'sender' && a.approval_status === 'approved'
     ) ?? null;
   const activeRecipientApproval =
     (approvals ?? []).find(
-      (a) => a.approval_role === 'recipient' && a.approval_status === 'approved'
+      (a: { approval_role?: string; approval_status?: string }) =>
+        a.approval_role === 'recipient' && a.approval_status === 'approved'
     ) ?? null;
 
   return {
