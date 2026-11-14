@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import { ArrowRight, Check, CheckCircle2, Copy } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import type { WalletState } from '../types';
+import { FacialVerificationStep } from './mutual-trust/FacialVerificationStep';
 
 interface WalletConfirmationProps {
+  userId?: string;
   wallet: WalletState;
   onOpenSecurity: () => void;
   onContinue: () => void;
 }
 
 export const WalletConfirmation: React.FC<WalletConfirmationProps> = ({
+  userId,
   wallet,
   onOpenSecurity,
   onContinue,
@@ -38,16 +41,16 @@ export const WalletConfirmation: React.FC<WalletConfirmationProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
         <CheckCircle2 size={20} style={{ color: '#25b864' }} aria-hidden="true" />
         <span className="eyebrow" style={{ color: 'var(--ink)' }}>
-          STEP 3 OF 3 · WALLET READY
+          STEP 3 OF 3 · WALLET &amp; OWNER IDENTITY READY
         </span>
       </div>
 
       <h1 className="heading-lg" style={{ marginBottom: '12px' }}>
-        Wallet connected.
+        Wallet &amp; Mutual Trust readiness.
       </h1>
       <p className="body-md" style={{ marginBottom: '24px' }}>
-        Your wallet is linked to this Word session. Review your connection details below before
-        entering the workspace.
+        Your wallet is linked to this Word session. Review your connection details and ensure your
+        Owner Face Scan is ready below before entering the workspace.
       </p>
 
       <div
@@ -117,6 +120,17 @@ export const WalletConfirmation: React.FC<WalletConfirmationProps> = ({
         </div>
       </div>
 
+      {userId && (
+        <div style={{ marginBottom: '22px' }}>
+          <FacialVerificationStep
+            userId={userId}
+            wallet={wallet}
+            compact
+            onVerified={() => {}}
+          />
+        </div>
+      )}
+
       <div className="ws-actions-row">
         <button
           type="button"
@@ -134,4 +148,5 @@ export const WalletConfirmation: React.FC<WalletConfirmationProps> = ({
     </div>
   );
 };
+
 

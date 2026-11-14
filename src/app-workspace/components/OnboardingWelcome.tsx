@@ -11,6 +11,10 @@ interface OnboardingWelcomeProps {
 
 const HIGHLIGHTS = [
   {
+    title: 'Owner facial liveness ready',
+    desc: 'Complete or confirm your POPIA-compliant Owner Face Scan so Mutual Trust Verification is ready for bilateral payments.',
+  },
+  {
     title: 'Verify before sending',
     desc: 'Check cryptographic wallet control and destination details before approving.',
   },

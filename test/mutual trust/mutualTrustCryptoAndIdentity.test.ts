@@ -16,6 +16,11 @@ import {
   submitAlternativeVerification,
   submitFacialLivenessCapture,
 } from '../../src/services/identityVerificationService';
+import {
+  enrollOwnerFaceScan,
+  evaluatePasswordStrength,
+  validateSignUpRegistration,
+} from '../../src/services/authService';
 import { supabase } from '../../src/lib/supabase';
 import identityProviderSource from '../../supabase/functions/_shared/identityProvider.ts?raw';
 import identityFunctionSource from '../../supabase/functions/identity-verification/index.ts?raw';
@@ -360,6 +365,110 @@ describe('Mutual Trust Identity, Cryptography & Privacy Controls', () => {
     const deleted = await eraseMyIdentityData();
     expect(deleted.deleted).toBe(true);
     expect(deleted.revokedCount).toBe(2);
+  });
+
+  it('validates sign-up security checks and enrolls the Owner Face Scan on account creation', async () => {
+    const weakPw = evaluatePasswordStrength('abc123');
+    expect(weakPw.isAcceptable).toBe(false);
+    expect(weakPw.label).toBe('Weak');
+
+    const strongPw = evaluatePasswordStrength('TrustFirst#2026');
+    expect(strongPw.isAcceptable).toBe(true);
+    expect(strongPw.score).toBe(4);
+    expect(strongPw.label).toBe('Strong');
+
+    const failedValidation = validateSignUpRegistration({
+      displayName: 'A',
+      email: 'bad-email',
+      password: 'TrustFirst#2026',
+      confirmPassword: 'Mismatch#2026',
+      ownerAndPopiaAccepted: false,
+      selfCustodyAccepted: false,
+      faceScanReady: false,
+      deferFaceScanToOnboarding: false,
+    });
+    expect(failedValidation.valid).toBe(false);
+    expect(failedValidation.checks.nameValid).toBe(false);
+    expect(failedValidation.checks.emailValid).toBe(false);
+    expect(failedValidation.checks.passwordsMatch).toBe(false);
+    expect(failedValidation.checks.consentsAccepted).toBe(false);
+    expect(failedValidation.checks.faceScanSatisfied).toBe(false);
+
+    const passedValidation = validateSignUpRegistration({
+      displayName: 'Thabo Mofoka',
+      email: 'thabo@word.finance',
+      password: 'TrustFirst#2026',
+      confirmPassword: 'TrustFirst#2026',
+      ownerAndPopiaAccepted: true,
+      selfCustodyAccepted: true,
+      faceScanReady: true,
+      deferFaceScanToOnboarding: false,
+    });
+    expect(passedValidation.valid).toBe(true);
+    expect(passedValidation.errors).toHaveLength(0);
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            identity: {
+              hasRecord: true,
+              isVerified: false,
+              isSandbox: false,
+              provider: 'veriff',
+              verificationMethod: 'facial_liveness',
+              verificationOutcome: 'pending',
+              livenessOutcome: 'pending',
+              assuranceLevel: 'none',
+            },
+            session: {
+              identityResultId: 'id-signup-1',
+              provider: 'veriff',
+              providerSessionId: 'veriff_signup_123',
+              isSandbox: false,
+              hostedSessionUrl: 'https://saas.veriff.com/v/signup123',
+              challenges: ['Center your face', 'Turn slightly left'],
+              expiresAt: new Date(Date.now() + 900_000).toISOString(),
+            },
+          }),
+          { status: 201 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            identity: {
+              hasRecord: true,
+              isVerified: true,
+              isSandbox: false,
+              provider: 'veriff',
+              verificationMethod: 'facial_liveness',
+              verificationOutcome: 'verified',
+              livenessOutcome: 'passed',
+              assuranceLevel: 'biometric_liveness_l2',
+            },
+            signedAttestation: {
+              attestationHash: 'att_signup_hash',
+              attestationSignature: 'att_signup_sig',
+              issuedAt: new Date().toISOString(),
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const enrolled = await enrollOwnerFaceScan({
+      challengesCompleted: ['Center your face', 'Turn slightly left'],
+      telemetry: {
+        frameCount: 4,
+        motionDeltaScore: 6.4,
+        averageLuminance: 132.5,
+        faceBoxDetected: true,
+      },
+      capturedAt: new Date().toISOString(),
+    });
+    expect(enrolled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -26,7 +26,11 @@ import {
   type SupportedNetworkName,
   type WalletBalances,
 } from '../services/wdkWalletService';
-import { updateMyProfile } from '../services/authService';
+import {
+  consumePendingOwnerFaceScan,
+  enrollOwnerFaceScan,
+  updateMyProfile,
+} from '../services/authService';
 import { listTransactions, verifyBlockchainReceipt } from '../services/paymentsService';
 import {
   listMyMutualTrustSessions,
@@ -228,6 +232,14 @@ export const WordApp: React.FC<WordAppProps> = ({
       );
     } finally {
       setSyncingData(false);
+    }
+  }, [session.id]);
+
+  useEffect(() => {
+    if (!session.id) return;
+    const pendingFaceScan = consumePendingOwnerFaceScan();
+    if (pendingFaceScan) {
+      void enrollOwnerFaceScan(pendingFaceScan);
     }
   }, [session.id]);
 
@@ -501,6 +513,7 @@ export const WordApp: React.FC<WordAppProps> = ({
 
               {step === 'wallet-confirm' && wallet && (
                 <WalletConfirmation
+                  userId={session.id}
                   wallet={wallet}
                   onOpenSecurity={() => {
                     setPreviousStepBeforeSecurity('wallet-confirm');

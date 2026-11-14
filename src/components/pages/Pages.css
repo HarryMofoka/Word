@@ -30,16 +30,17 @@
 .auth-frosted-pane {
   position: relative;
   z-index: 2;
-  width: min(560px, 50vw);
+  width: min(620px, 54vw);
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: rgba(247, 247, 245, 0.78);
+  background-color: rgba(247, 247, 245, 0.84);
   backdrop-filter: blur(24px) saturate(1.1);
   -webkit-backdrop-filter: blur(24px) saturate(1.1);
   padding: clamp(28px, 4vw, 56px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow-y: auto;
 }
 
 .auth-screen--signin .auth-frosted-pane {
@@ -76,8 +77,13 @@
 
 .auth-form-wrap {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   margin-block: 36px;
+}
+
+.auth-form-wrap--signup {
+  max-width: 470px;
+  margin-block: 24px;
 }
 
 .auth-form {
