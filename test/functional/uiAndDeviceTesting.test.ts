@@ -144,15 +144,13 @@ describe('Phase 11: UI and Device Testing', () => {
     expect(lowRamMobile.runtime).toBe('local-deterministic');
   });
 
-  it('11. implements the iPhone Duo Fade-In / Fade-Out animation on the Web Dashboard and in the Expo 58 React Native mobile app', () => {
-    // Web Dashboard Duo Fade-In / Fade-Out animations
-    expect(dashboardViewSource).toContain('DUO_TRUST_STAGES');
-    expect(dashboardViewSource).toContain('IPHONE DUO · BILATERAL MUTUAL TRUST');
-    expect(dashboardViewSource).toContain('ws-duo-showcase');
+  it('11. implements the Duo Fade-In / Fade-Out card animations on the Web Dashboard and in the Expo 58 React Native mobile app', () => {
+    // Web Dashboard Duo Fade-In / Fade-Out animations without the standalone iPhone Duo showcase card
+    expect(dashboardViewSource).not.toContain('IPHONE DUO · BILATERAL MUTUAL TRUST');
+    expect(dashboardViewSource).toContain('ws-duo-card');
     expect(dashboardViewSource).toContain('ws-duo-fade-swap');
     expect(workspaceCssRaw).toContain('@keyframes wsDuoCardFadeIn');
-    expect(workspaceCssRaw).toContain('@keyframes wsDuoPhoneFloatLeft');
-    expect(workspaceCssRaw).toContain('@keyframes wsDuoPhoneFloatRight');
+    expect(workspaceCssRaw).toContain('minmax(0, 1.15fr) minmax(0, 0.85fr)');
 
     // Expo 58 React Native Mobile App parity
     const mobilePkg = JSON.parse(mobilePkgRaw);

@@ -67,10 +67,33 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         <div>
           {visible.map((n) => (
             <div key={n.id} className="ws-notif-row">
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'flex-start',
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
                 {!n.read && <span className="ws-unread-dot" aria-label="Unread" />}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                <div
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      marginBottom: '3px',
+                    }}
+                  >
                     <span style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--ink)' }}>
                       {n.title}
                     </span>
