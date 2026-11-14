@@ -41,7 +41,7 @@ export interface DisputeCase {
   evidence: EvidenceItem[];
 }
 
-export type PaymentFlowMode = 'hub' | 'create-request' | 'scan-pay';
+export type PaymentFlowMode = 'hub' | 'create-request' | 'scan-pay' | 'mutual-trust';
 
 export interface PaymentRequestData {
   id: string;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import type { UserSession, WalletState } from '../types';
+import { FacialVerificationStep } from './mutual-trust/FacialVerificationStep';
 
 interface ProfileViewProps {
   session: UserSession;
@@ -106,6 +107,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
         </div>
       </form>
+      {session.id && (
+        <div style={{ marginTop: '28px', paddingTop: '22px', borderTop: '1px solid var(--line)' }}>
+          <FacialVerificationStep
+            userId={session.id}
+            wallet={wallet}
+            compact
+            onVerified={() => {}}
+          />
+        </div>
+      )}
     </div>
   );
 };

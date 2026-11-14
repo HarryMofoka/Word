@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut, Shield, Trash2 } from 'lucide-react';
 import type { WalletState } from '../types';
 import {
   NETWORK_CONFIGS,
   type SupportedNetworkName,
 } from '../../config/blockchain';
 import { getPrivacyDisclosureSummary } from '../../services/privacyService';
+import { eraseMyIdentityData } from '../../services/identityVerificationService';
 
 interface SettingsViewProps {
   wallet: WalletState;
@@ -28,6 +29,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [riskWarnings, setRiskWarnings] = useState(true);
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [erasingIdentity, setErasingIdentity] = useState(false);
+  const [eraseMessage, setEraseMessage] = useState<string | null>(null);
+
+  const handleEraseIdentity = async () => {
+    setErasingIdentity(true);
+    setEraseMessage(null);
+    try {
+      const res = await eraseMyIdentityData();
+      setEraseMessage(
+        `Erased ${res.revokedCount} stored verification record(s) under POPIA data deletion controls.`
+      );
+    } catch (err) {
+      setEraseMessage(err instanceof Error ? err.message : 'Unable to erase identity data.');
+    } finally {
+      setErasingIdentity(false);
+    }
+  };
 
   const handleNetworkSelect = async (next: SupportedNetworkName) => {
     setSwitchingNetwork(true);
@@ -163,6 +181,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </li>
           ))}
         </ul>
+      </div>
+
+      <div
+        style={{
+          marginTop: '14px',
+          padding: '14px 16px',
+          borderRadius: '10px',
+          border: '1px solid var(--line)',
+          background: 'var(--bg)',
+        }}
+      >
+        <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
+          Mutual Trust identity &amp; POPIA biometric privacy
+        </p>
+        <p className="body-sm" style={{ marginBottom: '10px' }}>
+          Raw facial videos, photos, and biometric templates are never stored on Word servers, never
+          placed on-chain, and never shared with counterparties. Only signed attestation status
+          metadata is kept for up to 30 days unless revoked earlier.
+        </p>
+        {eraseMessage && (
+          <p className="body-sm" style={{ marginBottom: '8px', color: 'var(--ink)' }}>
+            {eraseMessage}
+          </p>
+        )}
+        <button
+          type="button"
+          className="ws-ghost-btn"
+          onClick={() => void handleEraseIdentity()}
+          disabled={erasingIdentity}
+        >
+          <Trash2 size={14} />{' '}
+          {erasingIdentity ? 'Erasing verification data...' : 'Delete identity verification records'}
+        </button>
       </div>
 
       <div

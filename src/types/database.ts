@@ -260,6 +260,302 @@ export type Database = {
           },
         ]
       }
+      identity_verification_results: {
+        Row: {
+          assurance_level: string
+          attestation_hash: string
+          attestation_signature: string
+          created_at: string
+          enrolled_commitment_hash: string | null
+          expires_at: string | null
+          failure_reason: string | null
+          id: string
+          is_sandbox: boolean
+          liveness_outcome: string
+          popia_consent_at: string | null
+          provider: string
+          provider_session_id: string
+          retention_expires_at: string
+          revoked_at: string | null
+          security_warnings: Json
+          updated_at: string
+          user_id: string
+          verification_method: string
+          verification_outcome: string
+          verified_at: string | null
+        }
+        Insert: {
+          assurance_level?: string
+          attestation_hash: string
+          attestation_signature: string
+          created_at?: string
+          enrolled_commitment_hash?: string | null
+          expires_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          is_sandbox?: boolean
+          liveness_outcome?: string
+          popia_consent_at?: string | null
+          provider: string
+          provider_session_id: string
+          retention_expires_at?: string
+          revoked_at?: string | null
+          security_warnings?: Json
+          updated_at?: string
+          user_id: string
+          verification_method?: string
+          verification_outcome?: string
+          verified_at?: string | null
+        }
+        Update: {
+          assurance_level?: string
+          attestation_hash?: string
+          attestation_signature?: string
+          created_at?: string
+          enrolled_commitment_hash?: string | null
+          expires_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          is_sandbox?: boolean
+          liveness_outcome?: string
+          popia_consent_at?: string | null
+          provider?: string
+          provider_session_id?: string
+          retention_expires_at?: string
+          revoked_at?: string | null
+          security_warnings?: Json
+          updated_at?: string
+          user_id?: string
+          verification_method?: string
+          verification_outcome?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "identity_verification_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mutual_trust_receipts: {
+        Row: {
+          agreement_id: string | null
+          agreement_terms_hash: string
+          agreement_version: number
+          amount_numeric: number
+          blockchain_tx_hash: string | null
+          canonical_tx_hash: string
+          chain_id: number
+          created_at: string
+          id: string
+          network: string
+          receipt_code: string
+          receipt_signature: string
+          recipient_approval_id: string | null
+          recipient_approved_at: string
+          recipient_id: string
+          recipient_verification_id: string | null
+          recipient_verification_summary: Json
+          recipient_wallet_address: string
+          sender_approval_id: string | null
+          sender_approved_at: string
+          sender_id: string
+          sender_verification_id: string | null
+          sender_verification_summary: Json
+          sender_wallet_address: string
+          session_id: string
+          settlement_status: string
+          token_symbol: string
+          transaction_id: string
+          updated_at: string
+        }
+        Insert: {
+          agreement_id?: string | null
+          agreement_terms_hash: string
+          agreement_version?: number
+          amount_numeric: number
+          blockchain_tx_hash?: string | null
+          canonical_tx_hash: string
+          chain_id: number
+          created_at?: string
+          id?: string
+          network: string
+          receipt_code: string
+          receipt_signature: string
+          recipient_approval_id?: string | null
+          recipient_approved_at: string
+          recipient_id: string
+          recipient_verification_id?: string | null
+          recipient_verification_summary: Json
+          recipient_wallet_address: string
+          sender_approval_id?: string | null
+          sender_approved_at: string
+          sender_id: string
+          sender_verification_id?: string | null
+          sender_verification_summary: Json
+          sender_wallet_address: string
+          session_id: string
+          settlement_status?: string
+          token_symbol: string
+          transaction_id: string
+          updated_at?: string
+        }
+        Update: {
+          agreement_id?: string | null
+          agreement_terms_hash?: string
+          agreement_version?: number
+          amount_numeric?: number
+          blockchain_tx_hash?: string | null
+          canonical_tx_hash?: string
+          chain_id?: number
+          created_at?: string
+          id?: string
+          network?: string
+          receipt_code?: string
+          receipt_signature?: string
+          recipient_approval_id?: string | null
+          recipient_approved_at?: string
+          recipient_id?: string
+          recipient_verification_id?: string | null
+          recipient_verification_summary?: Json
+          recipient_wallet_address?: string
+          sender_approval_id?: string | null
+          sender_approved_at?: string
+          sender_id?: string
+          sender_verification_id?: string | null
+          sender_verification_summary?: Json
+          sender_wallet_address?: string
+          session_id?: string
+          settlement_status?: string
+          token_symbol?: string
+          transaction_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mutual_verification_sessions: {
+        Row: {
+          agreement_terms_hash: string
+          agreement_version: number
+          amount_atomic: string
+          amount_numeric: number
+          canonical_nonce: string
+          canonical_payload: Json
+          canonical_tx_hash: string
+          chain_id: number
+          created_at: string
+          decline_reason: string | null
+          declined_by: string | null
+          expires_at: string
+          id: string
+          network: string
+          payment_agreement_id: string | null
+          payment_request_id: string | null
+          purpose: string
+          recipient_approved_at: string | null
+          recipient_id: string
+          recipient_identity_id: string | null
+          recipient_report_viewed_at: string | null
+          recipient_verification_status: string
+          recipient_wallet_address: string
+          reports_exchanged_at: string | null
+          sender_approved_at: string | null
+          sender_id: string
+          sender_identity_id: string | null
+          sender_report_viewed_at: string | null
+          sender_verification_status: string
+          sender_wallet_address: string
+          session_state: string
+          share_code: string | null
+          token_address: string
+          token_decimals: number
+          token_symbol: string
+          updated_at: string
+          verification_expires_at: string
+        }
+        Insert: {
+          agreement_terms_hash: string
+          agreement_version?: number
+          amount_atomic: string
+          amount_numeric: number
+          canonical_nonce: string
+          canonical_payload: Json
+          canonical_tx_hash: string
+          chain_id: number
+          created_at?: string
+          decline_reason?: string | null
+          declined_by?: string | null
+          expires_at?: string
+          id?: string
+          network: string
+          payment_agreement_id?: string | null
+          payment_request_id?: string | null
+          purpose: string
+          recipient_approved_at?: string | null
+          recipient_id: string
+          recipient_identity_id?: string | null
+          recipient_report_viewed_at?: string | null
+          recipient_verification_status?: string
+          recipient_wallet_address: string
+          reports_exchanged_at?: string | null
+          sender_approved_at?: string | null
+          sender_id: string
+          sender_identity_id?: string | null
+          sender_report_viewed_at?: string | null
+          sender_verification_status?: string
+          sender_wallet_address: string
+          session_state?: string
+          share_code?: string | null
+          token_address: string
+          token_decimals?: number
+          token_symbol: string
+          updated_at?: string
+          verification_expires_at?: string
+        }
+        Update: {
+          agreement_terms_hash?: string
+          agreement_version?: number
+          amount_atomic?: string
+          amount_numeric?: number
+          canonical_nonce?: string
+          canonical_payload?: Json
+          canonical_tx_hash?: string
+          chain_id?: number
+          created_at?: string
+          decline_reason?: string | null
+          declined_by?: string | null
+          expires_at?: string
+          id?: string
+          network?: string
+          payment_agreement_id?: string | null
+          payment_request_id?: string | null
+          purpose?: string
+          recipient_approved_at?: string | null
+          recipient_id?: string
+          recipient_identity_id?: string | null
+          recipient_report_viewed_at?: string | null
+          recipient_verification_status?: string
+          recipient_wallet_address?: string
+          reports_exchanged_at?: string | null
+          sender_approved_at?: string | null
+          sender_id?: string
+          sender_identity_id?: string | null
+          sender_report_viewed_at?: string | null
+          sender_verification_status?: string
+          sender_wallet_address?: string
+          session_state?: string
+          share_code?: string | null
+          token_address?: string
+          token_decimals?: number
+          token_symbol?: string
+          updated_at?: string
+          verification_expires_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           category: string
@@ -557,12 +853,82 @@ export type Database = {
           },
         ]
       }
+      transaction_approvals: {
+        Row: {
+          approval_role: string
+          approval_status: string
+          approved_at: string | null
+          approving_user_id: string
+          approving_wallet_address: string
+          canonical_tx_hash: string
+          created_at: string
+          decline_reason: string | null
+          eip712_domain: Json | null
+          eip712_message: Json | null
+          expires_at: string
+          id: string
+          recovered_address: string | null
+          revoked_at: string | null
+          session_id: string
+          signature: string | null
+          signature_type: string
+          statement_text: string
+          transaction_id: string | null
+        }
+        Insert: {
+          approval_role: string
+          approval_status: string
+          approved_at?: string | null
+          approving_user_id: string
+          approving_wallet_address: string
+          canonical_tx_hash: string
+          created_at?: string
+          decline_reason?: string | null
+          eip712_domain?: Json | null
+          eip712_message?: Json | null
+          expires_at: string
+          id?: string
+          recovered_address?: string | null
+          revoked_at?: string | null
+          session_id: string
+          signature?: string | null
+          signature_type?: string
+          statement_text: string
+          transaction_id?: string | null
+        }
+        Update: {
+          approval_role?: string
+          approval_status?: string
+          approved_at?: string | null
+          approving_user_id?: string
+          approving_wallet_address?: string
+          canonical_tx_hash?: string
+          created_at?: string
+          decline_reason?: string | null
+          eip712_domain?: Json | null
+          eip712_message?: Json | null
+          expires_at?: string
+          id?: string
+          recovered_address?: string | null
+          revoked_at?: string | null
+          session_id?: string
+          signature?: string | null
+          signature_type?: string
+          statement_text?: string
+          transaction_id?: string | null
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount_atomic: string
           amount_numeric: number
+          canonical_tx_hash: string | null
           created_at: string
           id: string
+          mutual_authorized_at: string | null
+          mutual_session_id: string | null
+          mutual_trust_receipt_id: string | null
           network: string
           payment_agreement_id: string | null
           payment_request_id: string | null
@@ -583,8 +949,12 @@ export type Database = {
         Insert: {
           amount_atomic: string
           amount_numeric: number
+          canonical_tx_hash?: string | null
           created_at?: string
           id?: string
+          mutual_authorized_at?: string | null
+          mutual_session_id?: string | null
+          mutual_trust_receipt_id?: string | null
           network?: string
           payment_agreement_id?: string | null
           payment_request_id?: string | null
@@ -605,8 +975,12 @@ export type Database = {
         Update: {
           amount_atomic?: string
           amount_numeric?: number
+          canonical_tx_hash?: string | null
           created_at?: string
           id?: string
+          mutual_authorized_at?: string | null
+          mutual_session_id?: string | null
+          mutual_trust_receipt_id?: string | null
           network?: string
           payment_agreement_id?: string | null
           payment_request_id?: string | null

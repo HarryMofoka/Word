@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { WordLogo } from '../../components/ui/WordLogo';
 import type { UserSession } from '../types';
 
 interface OnboardingWelcomeProps {
@@ -29,9 +30,12 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({
 }) => {
   return (
     <div className="ws-card">
-      <p className="eyebrow" style={{ marginBottom: '12px' }}>
-        STEP 1 OF 3 · WELCOME
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+        <WordLogo size={26} />
+        <p className="eyebrow" style={{ margin: 0 }}>
+          STEP 1 OF 3 · WELCOME
+        </p>
+      </div>
       <h1 className="heading-lg" style={{ marginBottom: '12px' }}>
         {session.displayName ? `Welcome, ${session.displayName}.` : 'Welcome to Word.'}
       </h1>

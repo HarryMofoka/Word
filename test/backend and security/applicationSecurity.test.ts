@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import vercelConfigRaw from '../../vercel.json?raw';
 import gitignoreRaw from '../../.gitignore?raw';

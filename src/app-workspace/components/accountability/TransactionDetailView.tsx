@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -8,6 +8,11 @@ import {
   Share2,
 } from 'lucide-react';
 import type { DisputeCase, PaymentRecord } from '../../types';
+import {
+  fetchMutualTrustReceiptByTransactionId,
+  type MutualTrustReceiptRecord,
+} from '../../../services/mutualTrustService';
+import { MutualTrustReceiptView } from '../mutual-trust/MutualTrustReceiptView';
 
 interface TransactionDetailViewProps {
   record: PaymentRecord;
@@ -26,6 +31,20 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
   onOpenSharedRecord,
   onOpenDispute,
 }) => {
+  const [mutualReceipt, setMutualReceipt] = useState<MutualTrustReceiptRecord | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchMutualTrustReceiptByTransactionId(record.id)
+      .then((res) => {
+        if (active) setMutualReceipt(res);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, [record.id]);
+
   const updates = [
     ...(dispute
       ? [
@@ -162,6 +181,12 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
           </div>
         ))}
       </div>
+
+      {mutualReceipt && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MutualTrustReceiptView receipt={mutualReceipt} />
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, Ban, Check, Copy, QrCode, RefreshCw, Send } from 'lucide-react';
+import {
+  ArrowRight,
+  Ban,
+  Check,
+  Copy,
+  QrCode,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+} from 'lucide-react';
 import type { PaymentFlowMode, PaymentRecord, PaymentRequestData, WalletState } from '../../types';
 import { PaymentRequestFlow } from './PaymentRequestFlow';
 import { PaymentPayFlow } from './PaymentPayFlow';
@@ -9,6 +18,11 @@ import {
   listPaymentRequests,
   type PaymentRequestRow,
 } from '../../../services/paymentsService';
+import {
+  listMyMutualTrustSessions,
+  type HydratedMutualSession,
+} from '../../../services/mutualTrustService';
+import { MutualTrustFlow } from '../mutual-trust/MutualTrustFlow';
 
 function toRequestData(row: PaymentRequestRow): PaymentRequestData {
   return {
@@ -33,22 +47,32 @@ function toRequestData(row: PaymentRequestRow): PaymentRequestData {
 }
 
 interface PaymentsHubProps {
+  userId?: string;
   wallet: WalletState;
   initialMode?: PaymentFlowMode;
   initialRequest?: PaymentRequestData | null;
+  initialMutualSessionId?: string | null;
   onRecordAdded: (rec: PaymentRecord) => void;
   onDoneToDashboard: () => void;
 }
 
 export const PaymentsHub: React.FC<PaymentsHubProps> = ({
+  userId,
   wallet,
   initialMode = 'hub',
   initialRequest = null,
+  initialMutualSessionId = null,
   onRecordAdded,
   onDoneToDashboard,
 }) => {
   const [mode, setMode] = useState<PaymentFlowMode>(initialMode);
   const [previewReq, setPreviewReq] = useState<PaymentRequestData | null>(initialRequest);
+  const [activeMutualSessionId, setActiveMutualSessionId] = useState<string | null>(
+    initialMutualSessionId
+  );
+  const [handedOffMutualSession, setHandedOffMutualSession] =
+    useState<HydratedMutualSession | null>(null);
+  const [mutualSessions, setMutualSessions] = useState<HydratedMutualSession[]>([]);
   const [requests, setRequests] = useState<PaymentRequestRow[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -59,14 +83,18 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
     setLoadingRequests(true);
     setHubError(null);
     try {
-      const rows = await listPaymentRequests();
+      const [rows, mSessions] = await Promise.all([
+        listPaymentRequests(),
+        userId ? listMyMutualTrustSessions().catch(() => []) : Promise.resolve([]),
+      ]);
       setRequests(rows);
+      setMutualSessions(mSessions);
     } catch (err) {
       setHubError(err instanceof Error ? err.message : 'Unable to load payment requests.');
     } finally {
       setLoadingRequests(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (mode === 'hub') {
@@ -76,6 +104,12 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const mutualParam = params.get('mutualSession');
+    if (mutualParam && /^[0-9a-f-]{36}$/i.test(mutualParam.trim()) && userId) {
+      setActiveMutualSessionId(mutualParam.trim());
+      setMode('mutual-trust');
+      return;
+    }
     const payCode = params.get('pay');
     if (payCode && /^WRD-[A-Z0-9]+$/i.test(payCode.trim())) {
       fetchPaymentRequestByCode(payCode.trim())
@@ -87,7 +121,38 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
           // leave on hub if invalid code
         });
     }
-  }, []);
+  }, [userId]);
+
+  if (mode === 'mutual-trust' && userId) {
+    return (
+      <MutualTrustFlow
+        userId={userId}
+        wallet={wallet}
+        sessionId={activeMutualSessionId}
+        onBack={() => {
+          setActiveMutualSessionId(null);
+          setMode('hub');
+        }}
+        onReadyToExecute={(hydrated) => {
+          setHandedOffMutualSession(hydrated);
+          setPreviewReq({
+            id: hydrated.session.payment_request_id ?? hydrated.session.id,
+            shareCode: hydrated.session.share_code ?? undefined,
+            amount: String(hydrated.session.amount_numeric),
+            token: hydrated.session.token_symbol,
+            network: hydrated.session.network,
+            recipientName: hydrated.recipientReport.displayName,
+            recipientAddress: hydrated.session.recipient_wallet_address,
+            description: hydrated.session.purpose,
+            terms: hydrated.agreement?.termsText,
+            shareUrl: `${window.location.origin}/app?mutualSession=${hydrated.session.id}`,
+            status: 'open',
+          });
+          setMode('scan-pay');
+        }}
+      />
+    );
+  }
 
   if (mode === 'create-request') {
     return (
@@ -105,10 +170,13 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
   if (mode === 'scan-pay') {
     return (
       <PaymentPayFlow
+        userId={userId}
         wallet={wallet}
         initialRequest={previewReq}
+        initialMutualSession={handedOffMutualSession}
         onBack={() => {
           setPreviewReq(null);
+          setHandedOffMutualSession(null);
           setMode('hub');
         }}
         onRecordAdded={onRecordAdded}
@@ -158,6 +226,7 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
           className="ws-option-btn"
           onClick={() => {
             setPreviewReq(null);
+            setHandedOffMutualSession(null);
             setMode('scan-pay');
           }}
         >
@@ -170,14 +239,96 @@ export const PaymentsHub: React.FC<PaymentsHubProps> = ({
                 Scan QR code &amp; pay
               </h2>
               <p className="body-sm">
-                Scan or paste a payment request, verify recipient wallet control, review risk
-                indicators, and explicitly approve.
+                Scan or paste a payment request, complete Mutual Trust verification, review risk
+                indicators, and co-sign before approving.
               </p>
             </div>
           </div>
           <ArrowRight size={16} style={{ marginTop: '4px', color: 'var(--sub)' }} />
         </button>
+
+        {userId && (
+          <button
+            type="button"
+            className="ws-option-btn"
+            onClick={() => {
+              setActiveMutualSessionId(null);
+              setMode('mutual-trust');
+            }}
+          >
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              <span className="ws-option-icon" aria-hidden="true">
+                <ShieldCheck size={18} />
+              </span>
+              <div>
+                <h2 className="heading-sm" style={{ fontSize: '15.5px', marginBottom: '4px' }}>
+                  Mutual Trust bilateral verification
+                </h2>
+                <p className="body-sm">
+                  Invite a Word counterparty for independent facial liveness checks, sanitized trust
+                  report exchange, and dual-party EIP-712 transaction approval.
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} style={{ marginTop: '4px', color: 'var(--sub)' }} />
+          </button>
+        )}
       </div>
+
+      {userId && mutualSessions.length > 0 && (
+        <div style={{ marginTop: '28px', paddingTop: '22px', borderTop: '1px solid var(--line)' }}>
+          <p className="eyebrow" style={{ marginBottom: '12px' }}>
+            MUTUAL TRUST SESSIONS &amp; INVITATIONS ({mutualSessions.length})
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {mutualSessions.map((item) => {
+              const isSender = item.session.sender_id === userId;
+              const counterpartyName = isSender
+                ? item.recipientReport.displayName
+                : item.senderReport.displayName;
+              return (
+                <div
+                  key={item.session.id}
+                  style={{
+                    border: '1px solid var(--line)',
+                    borderRadius: '12px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '14.5px', marginBottom: '2px' }}>
+                      {isSender ? 'Outgoing to ' : 'Invitation from '}
+                      {counterpartyName} · {item.session.amount_numeric} {item.session.token_symbol}
+                    </div>
+                    <div className="body-sm" style={{ color: 'var(--sub)' }}>
+                      {item.session.network} · State:{' '}
+                      <strong style={{ textTransform: 'capitalize' }}>
+                        {item.session.session_state.replace('_', ' ')}
+                      </strong>{' '}
+                      · Your identity: {isSender ? item.session.sender_verification_status : item.session.recipient_verification_status}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="ws-ghost-btn"
+                    onClick={() => {
+                      setActiveMutualSessionId(item.session.id);
+                      setMode('mutual-trust');
+                    }}
+                  >
+                    Open Session <ArrowRight size={13} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: '28px', paddingTop: '22px', borderTop: '1px solid var(--line)' }}>
         <div

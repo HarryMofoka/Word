@@ -39,6 +39,13 @@ import {
 } from '../../../services/wdkWalletService';
 import { getNetworkConfig } from '../../../config/blockchain';
 import { validateTransactionForSigning } from '../../../services/walletSecurityService';
+import {
+  createOrJoinMutualTrustSession,
+  type HydratedMutualSession,
+  type MutualTrustReceiptRecord,
+} from '../../../services/mutualTrustService';
+import { MutualTrustFlow } from '../mutual-trust/MutualTrustFlow';
+import { MutualTrustReceiptView } from '../mutual-trust/MutualTrustReceiptView';
 
 type PayStep =
   | 'scan'
@@ -46,6 +53,7 @@ type PayStep =
   | 'verify'
   | 'risk'
   | 'review'
+  | 'mutual_trust'
   | 'approve'
   | 'processing'
   | 'success'
@@ -53,8 +61,10 @@ type PayStep =
   | 'failure';
 
 interface PaymentPayFlowProps {
+  userId?: string;
   wallet: WalletState;
   initialRequest?: PaymentRequestData | null;
+  initialMutualSession?: HydratedMutualSession | null;
   onBack: () => void;
   onRecordAdded: (rec: PaymentRecord) => void;
   onDoneToDashboard: () => void;
@@ -73,14 +83,28 @@ const SAMPLE_REQUEST: PaymentRequestData = {
 };
 
 export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
+  userId,
   wallet,
   initialRequest,
+  initialMutualSession = null,
   onBack,
   onRecordAdded,
   onDoneToDashboard,
 }) => {
-  const [step, setStep] = useState<PayStep>(initialRequest ? 'received' : 'scan');
+  const [step, setStep] = useState<PayStep>(
+    initialMutualSession?.session.session_state === 'authorized'
+      ? 'approve'
+      : initialRequest
+        ? 'received'
+        : 'scan'
+  );
   const [request, setRequest] = useState<PaymentRequestData>(initialRequest || SAMPLE_REQUEST);
+  const [mutualSession, setMutualSession] = useState<HydratedMutualSession | null>(
+    initialMutualSession
+  );
+  const [mutualReceipt, setMutualReceipt] = useState<MutualTrustReceiptRecord | null>(null);
+  const [mutualStarting, setMutualStarting] = useState(false);
+  const [mutualInitError, setMutualInitError] = useState<string | null>(null);
   const [scanInput, setScanInput] = useState('');
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -271,6 +295,22 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     };
   }, [step, wallet.address, request.recipientAddress, request.amount, request.token, normalizedNetwork]);
 
+  const applyServerOutcome = (
+    transaction: Parameters<typeof toPaymentRecord>[0] & { status?: string }
+  ) => {
+    if (transaction.status === 'confirmed') {
+      onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
+      setStep('success');
+    } else if (transaction.status === 'processing' || transaction.status === 'pending') {
+      onRecordAdded(toPaymentRecord(transaction, 'Pending'));
+      setStep('pending');
+    } else {
+      onRecordAdded(toPaymentRecord(transaction, 'Failed'));
+      setTxError('Transaction reverted on-chain.');
+      setStep('failure');
+    }
+  };
+
   // Prepare, sign, broadcast, store txHash, and poll receipt on-chain
   useEffect(() => {
     if (step !== 'processing' || submittingRef.current) return;
@@ -280,6 +320,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     const executeRealPayment = async () => {
       setTxError(null);
       setTxHash(null);
+      let broadcastHash: string | null = null;
 
       try {
         const signingPreview = validateTransactionForSigning({
@@ -303,6 +344,8 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           purpose: request.description,
           senderAddress: signingPreview.fromAddress,
           paymentRequestId: isUuid ? request.id : undefined,
+          mutualSessionId: mutualSession?.session.id,
+          canonicalTxHash: mutualSession?.session.canonical_tx_hash,
         });
         if (!active) return;
         setPreparedTxId(prepared.id);
@@ -320,6 +363,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           signingPhrase: phraseToUse,
         });
         if (!active) return;
+        broadcastHash = hash;
         setTxHash(hash);
 
         await verifyBlockchainReceipt({
@@ -337,28 +381,32 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
           return;
         }
 
-        const { transaction } = await verifyBlockchainReceipt({
+        const { transaction, mutualTrustReceipt } = await verifyBlockchainReceipt({
           transactionId: prepared.id,
           txHash: hash,
           outcome,
         });
         if (!active) return;
 
-        if (outcome === 'confirmed') {
-          onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
-          setStep('success');
-        } else {
-          onRecordAdded(toPaymentRecord(transaction, 'Failed'));
-          setTxError('Transaction reverted on-chain.');
-          setStep('failure');
+        if (mutualTrustReceipt) {
+          setMutualReceipt(mutualTrustReceipt);
         }
+
+        // Server status (independently verified via RPC) is authoritative, not the client poll.
+        applyServerOutcome(transaction);
       } catch (err) {
         if (!active) return;
         setSigningPhrase('');
-        setTxError(
-          err instanceof Error ? err.message : 'Transaction could not be completed.'
-        );
-        setStep('failure');
+        const message =
+          err instanceof Error ? err.message : 'Transaction could not be completed.';
+        if (broadcastHash) {
+          // Funds may already be in flight: never report failure for a broadcast transaction.
+          setTxError(`Status sync interrupted after broadcast: ${message}`);
+          setStep('pending');
+        } else {
+          setTxError(message);
+          setStep('failure');
+        }
       } finally {
         submittingRef.current = false;
       }
@@ -376,19 +424,15 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
     try {
       const outcome = await pollTransactionReceipt(txHash, normalizedNetwork, 12000);
       if (outcome === 'pending') return;
-      const { transaction } = await verifyBlockchainReceipt({
+      const { transaction, mutualTrustReceipt } = await verifyBlockchainReceipt({
         transactionId: preparedTxId,
         txHash,
         outcome,
       });
-      if (outcome === 'confirmed') {
-        onRecordAdded(toPaymentRecord(transaction, 'Confirmed'));
-        setStep('success');
-      } else {
-        onRecordAdded(toPaymentRecord(transaction, 'Failed'));
-        setTxError('Transaction reverted on-chain.');
-        setStep('failure');
+      if (mutualTrustReceipt) {
+        setMutualReceipt(mutualTrustReceipt);
       }
+      applyServerOutcome(transaction);
     } catch (err) {
       setTxError(err instanceof Error ? err.message : 'Unable to recheck transaction status.');
     } finally {
@@ -1155,7 +1199,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
               </div>
             )}
 
-            {(quoteError || (quote && !quote.hasSufficientBalance)) && (
+            {(quoteError || (quote && !quote.hasSufficientBalance) || mutualInitError) && (
               <div
                 className="ws-notice"
                 style={{
@@ -1165,7 +1209,7 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
                   color: '#b42318',
                 }}
               >
-                <strong>Cannot proceed:</strong> {quoteError || quote?.insufficientReason}
+                <strong>Cannot proceed:</strong> {mutualInitError || quoteError || quote?.insufficientReason}
               </div>
             )}
 
@@ -1177,23 +1221,80 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
                 disabled={
                   !detailReport.valid ||
                   quoteLoading ||
+                  mutualStarting ||
                   Boolean(quoteError) ||
                   (quote ? !quote.hasSufficientBalance : false)
                 }
-                onClick={() => {
+                onClick={async () => {
                   setApprovedChecked(false);
-                  setStep('approve');
+                  setMutualInitError(null);
+                  if (!userId || mutualSession?.session.session_state === 'authorized') {
+                    setStep('approve');
+                    return;
+                  }
+                  setMutualStarting(true);
+                  try {
+                    const isUuid =
+                      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                        request.id
+                      );
+                    const created = await createOrJoinMutualTrustSession({
+                      paymentRequestId: isUuid ? request.id : undefined,
+                      shareCode: !isUuid && request.shareCode ? request.shareCode : undefined,
+                      recipientAddress: request.recipientAddress,
+                      senderWalletAddress: wallet.address,
+                      amount: request.amount,
+                      tokenSymbol: request.token,
+                      network: normalizedNetwork,
+                      purpose: request.description,
+                    });
+                    setMutualSession(created);
+                    setStep(
+                      created.session.session_state === 'authorized' ? 'approve' : 'mutual_trust'
+                    );
+                  } catch (err) {
+                    setMutualInitError(
+                      err instanceof Error
+                        ? err.message
+                        : 'Unable to start Mutual Trust Verification session.'
+                    );
+                  } finally {
+                    setMutualStarting(false);
+                  }
                 }}
               >
-                Proceed to approval <ArrowRight size={14} />
+                {mutualStarting
+                  ? 'Starting Mutual Trust Verification...'
+                  : 'Proceed to Mutual Trust & Approval'}{' '}
+                <ArrowRight size={14} />
               </Button>
             </div>
           </div>
           );
   }
 
+          // 5.5 MUTUAL TRUST VERIFICATION & BILATERAL SIGNATURES
+          if (step === 'mutual_trust' && userId) {
+    return (
+          <MutualTrustFlow
+            userId={userId}
+            wallet={wallet}
+            initialSession={mutualSession}
+            sessionId={mutualSession?.session.id ?? null}
+            onBack={() => setStep('review')}
+            onReadyToExecute={(authorizedSession) => {
+              setMutualSession(authorizedSession);
+              setApprovedChecked(false);
+              setStep('approve');
+            }}
+          />
+          );
+  }
+
           // 6. TRANSACTION APPROVAL SCREEN
           if (step === 'approve') {
+    const mutualAuthorized =
+      !userId || mutualSession?.session.session_state === 'authorized';
     return (
           <div className="ws-card" style={{ maxWidth: '640px' }}>
             <p className="eyebrow" style={{ marginBottom: '8px' }}>
@@ -1203,9 +1304,47 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
               Authorise {request.amount} {request.token}
             </h1>
             <p className="body-md" style={{ marginBottom: '20px' }}>
-              Word never submits payments without your explicit approval. Once confirmed on-chain,
-              blockchain transfers cannot be reversed.
+              Word never submits payments without bilateral Mutual Trust verification and your
+              explicit approval. Once confirmed on-chain, blockchain transfers cannot be reversed.
             </p>
+
+            {userId && (
+              <div
+                className="ws-notice"
+                style={{
+                  marginBottom: '18px',
+                  borderColor: mutualAuthorized ? 'var(--ink)' : '#d97706',
+                  backgroundColor: mutualAuthorized
+                    ? 'rgba(17, 17, 17, 0.04)'
+                    : 'rgba(217, 119, 6, 0.08)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <strong>
+                      {mutualAuthorized
+                        ? 'Mutual Trust Authorized (Both Parties Signed EIP-712)'
+                        : 'Mutual Trust Verification Required'}
+                    </strong>
+                    {mutualSession && (
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        Canonical Hash:{' '}
+                        <code>{mutualSession.session.canonical_tx_hash.slice(0, 18)}...</code>
+                      </div>
+                    )}
+                  </div>
+                  {!mutualAuthorized && (
+                    <button
+                      type="button"
+                      className="ws-ghost-btn"
+                      onClick={() => setStep('mutual_trust')}
+                    >
+                      Open Mutual Trust Flow
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {riskReport && (riskReport.riskLevel === 'high' || riskReport.riskLevel === 'critical') && (
               <div
@@ -1276,11 +1415,13 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
               <Button
                 disabled={
                   !approvedChecked ||
+                  !mutualAuthorized ||
                   submittingRef.current ||
                   (wallet.method !== 'connected' && signingPhrase.trim().split(/\s+/).length < 12)
                 }
                 style={
                   !approvedChecked ||
+                    !mutualAuthorized ||
                     (wallet.method !== 'connected' && signingPhrase.trim().split(/\s+/).length < 12)
                     ? { opacity: 0.5, cursor: 'not-allowed' }
                     : undefined
@@ -1345,6 +1486,12 @@ export const PaymentPayFlow: React.FC<PaymentPayFlowProps> = ({
                 >
                   View on Explorer <ExternalLink size={13} />
                 </a>
+              </div>
+            )}
+
+            {mutualReceipt && (
+              <div style={{ marginBottom: '22px' }}>
+                <MutualTrustReceiptView receipt={mutualReceipt} />
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { callEdgeFunction } from './apiClient';
 import type { Database } from '../types/database';
+import type { MutualTrustReceiptRecord } from './mutualTrustService';
 
 export type PaymentRequestRow = Database['public']['Tables']['payment_requests']['Row'];
 export type TransactionRow = Database['public']['Tables']['transactions']['Row'];
@@ -108,6 +109,8 @@ export async function preparePayment(params: {
   senderAddress?: string;
   paymentRequestId?: string;
   paymentAgreementId?: string;
+  mutualSessionId?: string;
+  canonicalTxHash?: string;
 }): Promise<TransactionRow> {
   const res = await callEdgeFunction<{ transaction: TransactionRow }>('payment-prepare', {
     method: 'POST',
@@ -122,7 +125,11 @@ export async function verifyBlockchainReceipt(params: {
   awaitingConfirmation?: boolean;
   outcome?: 'confirmed' | 'failed';
   simulateFailure?: boolean;
-}): Promise<{ transaction: TransactionRow; verified: boolean }> {
+}): Promise<{
+  transaction: TransactionRow;
+  verified: boolean;
+  mutualTrustReceipt?: MutualTrustReceiptRecord | null;
+}> {
   return callEdgeFunction('receipt-verify', {
     method: 'POST',
     body: params,

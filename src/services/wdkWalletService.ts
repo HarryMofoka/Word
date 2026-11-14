@@ -3,11 +3,14 @@ import WalletManagerEvm, { WalletAccountReadOnlyEvm } from '@tetherto/wdk-wallet
 import {
   BrowserProvider,
   Contract,
+  HDNodeWallet,
   JsonRpcProvider,
   formatEther,
   formatUnits,
   parseEther,
   parseUnits,
+  type TypedDataDomain,
+  type TypedDataField,
 } from 'ethers';
 import {
   DEFAULT_DEMO_NETWORK,
@@ -642,4 +645,62 @@ export async function signChallengeMessage(params: {
   } finally {
     wdk.dispose();
   }
+}
+
+/**
+ * Signs an EIP-712 structured approval payload using either a connected EIP-1193
+ * browser wallet or an ephemeral WDK recovery phrase (cleared from memory after signing).
+ */
+export async function signTypedDataMessage(params: {
+  domain: TypedDataDomain;
+  types: Record<string, TypedDataField[]>;
+  message: Record<string, unknown>;
+  expectedAddress: string;
+  network: string;
+  walletMethod: 'created' | 'connected' | 'imported';
+  signingPhrase?: string;
+}): Promise<string> {
+  const cfg = getNetworkConfig(params.network);
+
+  if (params.walletMethod === 'connected') {
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      throw new WalletIntegrationError(
+        'UNSUPPORTED_WALLET',
+        'Browser wallet provider not found.'
+      );
+    }
+    const provider = new BrowserProvider(eth);
+    const networkInfo = await provider.getNetwork();
+    if (Number(networkInfo.chainId) !== cfg.chainId) {
+      await switchBrowserNetwork(cfg.name);
+    }
+    const activeProvider = new BrowserProvider(eth);
+    const signer = await activeProvider.getSigner();
+    const signerAddr = await signer.getAddress();
+    if (signerAddr.toLowerCase() !== params.expectedAddress.toLowerCase()) {
+      throw new WalletIntegrationError(
+        'UNSUPPORTED_WALLET',
+        `Connected wallet (${signerAddr}) does not match expected address (${params.expectedAddress}).`
+      );
+    }
+    return signer.signTypedData(params.domain, params.types, params.message);
+  }
+
+  const phrase = (params.signingPhrase ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!phrase || !WDK.isValidSeed(phrase)) {
+    throw new WalletIntegrationError(
+      'INVALID_SEED',
+      'Enter your valid 12 or 24-word recovery phrase to sign this EIP-712 approval.'
+    );
+  }
+
+  const derivedWallet = HDNodeWallet.fromPhrase(phrase);
+  if (derivedWallet.address.toLowerCase() !== params.expectedAddress.toLowerCase()) {
+    throw new WalletIntegrationError(
+      'INVALID_SEED',
+      'The entered recovery phrase does not match your registered Word wallet address.'
+    );
+  }
+  return derivedWallet.signTypedData(params.domain, params.types, params.message);
 }

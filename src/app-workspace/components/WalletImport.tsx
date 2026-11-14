@@ -6,7 +6,7 @@ import { importWdkWallet } from '../../services/wdkWalletService';
 
 interface WalletImportProps {
   onBack: () => void;
-  onImportSuccess: (wallet: WalletState) => void;
+  onImportSuccess: (wallet: WalletState, signingPhrase?: string) => void;
 }
 
 export const WalletImport: React.FC<WalletImportProps> = ({ onBack, onImportSuccess }) => {
@@ -20,15 +20,19 @@ export const WalletImport: React.FC<WalletImportProps> = ({ onBack, onImportSucc
     setImporting(true);
 
     try {
-      const derived = await importWdkWallet(phrase, 'Testnet');
+      const normalizedPhrase = phrase;
+      const derived = await importWdkWallet(normalizedPhrase, 'Testnet');
       // Clear phrase from component state immediately after deriving address
       setPhrase('');
-      onImportSuccess({
-        address: derived.address,
-        method: 'imported',
-        network: derived.network,
-        recoveryBackedUp: true,
-      });
+      onImportSuccess(
+        {
+          address: derived.address,
+          method: 'imported',
+          network: derived.network,
+          recoveryBackedUp: true,
+        },
+        normalizedPhrase
+      );
     } catch (err) {
       setError(
         err instanceof Error

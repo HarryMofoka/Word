@@ -15,6 +15,7 @@ import {
 } from '../_shared/validation.ts';
 import { recordAuditLog } from '../_shared/logger.ts';
 import { enforceRateLimit } from '../_shared/rateLimit.ts';
+import { invalidateMutualSessionsForAgreement } from '../_shared/mutualTrustServer.ts';
 
 Deno.serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -278,6 +279,14 @@ Deno.serve(async (req: Request) => {
           change_note: changeNote,
           created_at: nowIso,
         });
+
+        await invalidateMutualSessionsForAgreement(
+          adminClient,
+          agreementId,
+          nextVersion,
+          termsText,
+          user.id
+        );
 
         await recordAuditLog(adminClient, {
           actorUserId: user.id,

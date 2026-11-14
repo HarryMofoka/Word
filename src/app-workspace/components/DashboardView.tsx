@@ -18,6 +18,7 @@ import type {
   WorkspaceTab,
 } from '../types';
 import type { WalletBalances } from '../../services/wdkWalletService';
+import type { HydratedMutualSession } from '../../services/mutualTrustService';
 
 interface DashboardViewProps {
   session: UserSession;
@@ -28,8 +29,10 @@ interface DashboardViewProps {
   onToggleBalance: () => void;
   records: PaymentRecord[];
   notifications: AppNotification[];
+  mutualSessions?: HydratedMutualSession[];
   onNavigateTab: (tab: WorkspaceTab) => void;
   onOpenPaymentMode: (mode: PaymentFlowMode) => void;
+  onOpenMutualSession?: (sessionId: string) => void;
   onSelectRecord: (recordId: string) => void;
   onOpenSecurity: () => void;
 }
@@ -43,13 +46,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleBalance,
   records,
   notifications,
+  mutualSessions = [],
   onNavigateTab,
   onOpenPaymentMode,
+  onOpenMutualSession,
   onSelectRecord,
   onOpenSecurity,
 }) => {
   const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
   const unreadNotifs = notifications.filter((n) => !n.read);
+  const openMutualSessions = mutualSessions.filter((m) =>
+    ['invited', 'verifying', 'reports_exchanged', 'awaiting_approvals', 'authorized', 'executing'].includes(
+      m.session.session_state
+    )
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -206,6 +216,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Pending Mutual Trust Invitations & Bilateral Sessions */}
+      {openMutualSessions.length > 0 && (
+        <div className="ws-card">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '12px',
+              gap: '10px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <p className="eyebrow">MUTUAL TRUST VERIFICATION ({openMutualSessions.length} ACTIVE)</p>
+            <button
+              type="button"
+              className="ws-ghost-btn"
+              onClick={() => onOpenPaymentMode('mutual-trust')}
+            >
+              Open Mutual Trust Hub
+            </button>
+          </div>
+          {openMutualSessions.slice(0, 3).map((item) => {
+            const isSender = item.session.sender_id === session.id;
+            const counterparty = isSender ? item.recipientReport.displayName : item.senderReport.displayName;
+            return (
+              <div key={item.session.id} className="ws-record-item">
+                <div>
+                  <p style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--ink)' }}>
+                    {isSender ? 'To ' : 'From '}
+                    {counterparty} · {item.session.amount_numeric} {item.session.token_symbol}
+                  </p>
+                  <p className="body-sm">
+                    State: {item.session.session_state.replace('_', ' ')} · {item.session.network}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ws-ghost-btn"
+                  onClick={() =>
+                    onOpenMutualSession
+                      ? onOpenMutualSession(item.session.id)
+                      : onOpenPaymentMode('mutual-trust')
+                  }
+                >
+                  Continue <ArrowRight size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bottom Row: Recent Transactions + Notifications Preview */}
       <div className="ws-grid">

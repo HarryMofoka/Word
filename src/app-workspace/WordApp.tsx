@@ -21,12 +21,18 @@ import {
 import {
   fetchWdkBalances,
   pollTransactionReceipt,
+  signChallengeMessage,
   switchBrowserNetwork,
   type SupportedNetworkName,
   type WalletBalances,
 } from '../services/wdkWalletService';
 import { updateMyProfile } from '../services/authService';
 import { listTransactions, verifyBlockchainReceipt } from '../services/paymentsService';
+import {
+  listMyMutualTrustSessions,
+  subscribeToUserMutualSessions,
+  type HydratedMutualSession,
+} from '../services/mutualTrustService';
 import {
   createDispute,
   listDisputes,
@@ -88,6 +94,8 @@ export const WordApp: React.FC<WordAppProps> = ({
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
   const [paymentInitialMode, setPaymentInitialMode] = useState<PaymentFlowMode>('hub');
   const [assistantHandoffRequest, setAssistantHandoffRequest] = useState<import('./types').PaymentRequestData | null>(null);
+  const [selectedMutualSessionId, setSelectedMutualSessionId] = useState<string | null>(null);
+  const [mutualSessions, setMutualSessions] = useState<HydratedMutualSession[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [records, setRecords] = useState<PaymentRecord[]>([]);
@@ -120,11 +128,13 @@ export const WordApp: React.FC<WordAppProps> = ({
     setSyncingData(true);
     setSyncError(null);
     try {
-      const [txRows, notifRows, disputeRows] = await Promise.all([
+      const [txRows, notifRows, disputeRows, mSessionRows] = await Promise.all([
         listTransactions(),
         listNotifications(),
         listDisputes(),
+        listMyMutualTrustSessions().catch(() => []),
       ]);
+      setMutualSessions(mSessionRows);
 
       let activeTxRows = txRows;
 
@@ -225,6 +235,23 @@ export const WordApp: React.FC<WordAppProps> = ({
     refreshWorkspaceData();
   }, [refreshWorkspaceData]);
 
+  useEffect(() => {
+    if (!session.id) return;
+    return subscribeToUserMutualSessions(session.id, () => {
+      void refreshWorkspaceData();
+    });
+  }, [session.id, refreshWorkspaceData]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mutualParam = params.get('mutualSession');
+    if (mutualParam && /^[0-9a-f-]{36}$/i.test(mutualParam.trim())) {
+      setSelectedMutualSessionId(mutualParam.trim());
+      setPaymentInitialMode('mutual-trust');
+      setActiveTab('payments');
+    }
+  }, []);
+
   const handleSaveDispute = async (dispute: DisputeCase) => {
     setDisputes((prev) => ({ ...prev, [dispute.recordId]: dispute }));
     try {
@@ -239,7 +266,10 @@ export const WordApp: React.FC<WordAppProps> = ({
     }
   };
 
-  const persistWalletRegistration = async (candidate: WalletState): Promise<WalletState> => {
+  const persistWalletRegistration = async (
+    candidate: WalletState,
+    signingPhrase?: string
+  ): Promise<WalletState> => {
     try {
       const { wallet: saved, challenge } = await registerWalletAndChallenge({
         address: candidate.address,
@@ -247,7 +277,14 @@ export const WordApp: React.FC<WordAppProps> = ({
         method: candidate.method,
         recoveryBackedUp: candidate.recoveryBackedUp,
       });
-      const sig = `0xword_sig_${challenge.nonce.replace(/-/g, '')}`;
+      const phrase = signingPhrase ?? candidate.demoSeedWords?.join(' ');
+      const sig = await signChallengeMessage({
+        message: challenge.message,
+        expectedAddress: candidate.address,
+        network: candidate.network,
+        walletMethod: candidate.method,
+        signingPhrase: phrase,
+      });
       await verifyWalletChallenge({ challengeId: challenge.id, signature: sig });
       return {
         ...candidate,
@@ -438,8 +475,8 @@ export const WordApp: React.FC<WordAppProps> = ({
               {step === 'wallet-import' && (
                 <WalletImport
                   onBack={() => setStep('wallet-setup')}
-                  onImportSuccess={async (importedWallet) => {
-                    const persisted = await persistWalletRegistration(importedWallet);
+                  onImportSuccess={async (importedWallet, signingPhrase) => {
+                    const persisted = await persistWalletRegistration(importedWallet, signingPhrase);
                     updateWallet(persisted);
                     setStep('wallet-confirm');
                   }}
@@ -455,7 +492,8 @@ export const WordApp: React.FC<WordAppProps> = ({
                     if (wallet.id) {
                       await updateWalletBackupFlag(wallet.id, true).catch(() => null);
                     }
-                    updateWallet({ ...wallet, recoveryBackedUp: true });
+                    // Strip mnemonic words from in-memory React state once backup is confirmed
+                    updateWallet({ ...wallet, recoveryBackedUp: true, demoSeedWords: undefined });
                     setStep('wallet-confirm');
                   }}
                 />
@@ -490,13 +528,23 @@ export const WordApp: React.FC<WordAppProps> = ({
                     onToggleBalance={() => setBalanceHidden((p) => !p)}
                     records={records}
                     notifications={notifications}
+                    mutualSessions={mutualSessions}
                     onNavigateTab={(tab) => {
-                      if (tab === 'payments') setPaymentInitialMode('hub');
+                      if (tab === 'payments') {
+                        setSelectedMutualSessionId(null);
+                        setPaymentInitialMode('hub');
+                      }
                       if (tab === 'records') setSelectedRecordId(null);
                       setActiveTab(tab);
                     }}
                     onOpenPaymentMode={(mode) => {
+                      setSelectedMutualSessionId(null);
                       setPaymentInitialMode(mode);
+                      setActiveTab('payments');
+                    }}
+                    onOpenMutualSession={(mSessionId) => {
+                      setSelectedMutualSessionId(mSessionId);
+                      setPaymentInitialMode('mutual-trust');
                       setActiveTab('payments');
                     }}
                     onSelectRecord={(recordId) => {
@@ -512,13 +560,17 @@ export const WordApp: React.FC<WordAppProps> = ({
 
                 {activeTab === 'payments' && (
                   <PaymentsHub
-                    key={`${paymentInitialMode}-${assistantHandoffRequest?.id ?? 'none'}`}
+                    key={`${paymentInitialMode}-${assistantHandoffRequest?.id ?? 'none'}-${selectedMutualSessionId ?? 'none'}`}
+                    userId={session.id}
                     wallet={wallet}
                     initialMode={paymentInitialMode}
                     initialRequest={assistantHandoffRequest}
+                    initialMutualSessionId={selectedMutualSessionId}
                     onRecordAdded={(rec) => setRecords((prev) => [rec, ...prev])}
                     onDoneToDashboard={() => {
                       setAssistantHandoffRequest(null);
+                      setSelectedMutualSessionId(null);
+                      void refreshWorkspaceData();
                       setActiveTab('dashboard');
                     }}
                   />
